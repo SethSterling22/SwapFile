@@ -1,0 +1,22 @@
+version: '3.9'
+
+services:
+  droplink:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    ports:
+      - "${PORT:-3000}:3000"
+    environment:
+      PORT: 3000
+      SESSION_TTL_MS: 1800000
+      MAX_MSG_BYTES: 16384
+      MAX_SESSIONS: 50000
+      RATE_LIMIT_PER_MIN: 120
+      CORS_ORIGIN: "*"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
