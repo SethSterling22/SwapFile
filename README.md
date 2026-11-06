@@ -106,7 +106,7 @@ droplink/
 
 | Module | Responsibility |
 |---|---|
-| **State / Persistence** | Generates and restores `deviceId`, `deviceName`, and `pairs[]` from `localStorage` |
+| **State / Persistence** | Generates and restores `deviceSecret`, `deviceId`, `deviceName`, and `pairs[]` from `localStorage` |
 | **SignalingClient** | WebSocket wrapper — register, pair, relay SDP/ICE, receive presence events |
 | **PeerConnection** | `RTCPeerConnection` lifecycle — offer, answer, ICE exchange, connection state |
 | **FileStreamer** | Reads file in 16 KB chunks via `FileReader`, sends over `RTCDataChannel` with backpressure |
@@ -118,11 +118,11 @@ droplink/
 | Concern | Implementation |
 |---|---|
 | Static file serving | Minimal built-in HTTP, SPA fallback for `?pair=` links |
-| Device registry | `Map<deviceId, {ws, name, pairedIds, rateLimit}>` — in-memory, no persistence |
+| Device registry | `Map<deviceId, {ws, name, pairedIds, pendingFrom}>` — in-memory, no persistence. `deviceId` is derived from a client secret (SHA-256) |
 | Presence | On connect: notifies paired devices online. On disconnect: broadcasts offline |
 | Pairing | Relays `pair-request` / `pair-accept` / `pair-reject` between devices |
-| Signal relay | Forwards SDP and ICE messages only between verified paired devices |
-| Security | Max message size 16 KB · Rate limit 120 msg/min · Max 50 000 sessions |
+| Signal relay | Forwards SDP and ICE messages only between mutually paired devices |
+| Security | Max message size 16 KB · Rate limit 120 msg/min per socket · Max 50 000 sessions · Handler errors never crash the process |
 
 ---
 
@@ -141,6 +141,17 @@ Open `http://localhost:3000` on your computer and `http://<YOUR-LOCAL-IP>:3000` 
 Find your local IP:
 - **macOS / Linux:** `ifconfig` or `ip a`
 - **Windows:** `ipconfig`
+
+---
+
+### Tests
+
+```bash
+cd droplink/server
+npm test
+```
+
+Integration tests (`node:test`) spawn the real server and exercise registration, pairing, signal relay, reconnection and idle expiry over WebSocket.
 
 ---
 
@@ -189,7 +200,7 @@ Copy `server/.env.example` → `server/.env`.
 | Variable | Default | Description |
 |---|---|---|
 | `PORT` | `3000` | HTTP server port |
-| `SESSION_TTL_MS` | `1800000` | Session TTL in ms (30 min) |
+| `SESSION_TTL_MS` | `1800000` | Idle timeout in ms (30 min). Refreshed on every message; on expiry the socket is closed and the client reconnects |
 | `MAX_MSG_BYTES` | `16384` | Max WebSocket message size — signaling only (16 KB) |
 | `MAX_SESSIONS` | `50000` | Max concurrent devices in memory |
 | `RATE_LIMIT_PER_MIN` | `120` | Max WebSocket messages per minute per device |
@@ -202,9 +213,9 @@ Copy `server/.env.example` → `server/.env`.
 | Threat | Mitigation |
 |---|---|
 | Server reads file content | Impossible — max message size is 16 KB (SDP/ICE only). Any larger message is rejected. |
-| Unauthorized signal relay | Server only forwards signals between devices that have completed a mutual pair handshake. |
+| Unauthorized signal relay | Server only forwards signals between devices that list each other as paired. `pair-accept` is only honored as the answer to a real `pair-request`. The receiver also ignores signals from unknown devices. |
 | QR link interception | The attacker needs the target device to be online and accept the pairing request. |
-| Replay / session hijack | `deviceId` is a UUID stored client-side. Sessions expire after `SESSION_TTL_MS`. |
+| Impersonation / session hijack | Each device keeps a random 256-bit `deviceSecret` in `localStorage`; the public `deviceId` (shown in the QR) is `SHA-256(secret)`. Knowing a `deviceId` is not enough to register as it. A newer connection with the same secret replaces the old one (close code `4001`). |
 | Server-side data leakage | No database, no logs of content or file metadata. Server only knows device names and pairing relationships. |
 
 > **Note:** In-transit encryption is provided by WebRTC's mandatory DTLS layer. End-to-end application-layer encryption (ECDH + AES-GCM via Web Crypto API) is planned for v1.1.
