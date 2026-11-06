@@ -162,12 +162,15 @@ The server is stateless — everything lives in memory. Any Node.js host works.
 ### Docker
 
 ```bash
-# Using docker-compose
-docker-compose up --build
+# Using docker compose (from droplink/) — serves on http://localhost:7341
+docker compose up --build -d
+
+# Use another host port
+DROPLINK_PORT=8080 docker compose up --build -d
 
 # Or directly
 docker build -f server/Dockerfile -t droplink .
-docker run -p 3000:3000 droplink
+docker run -p 7341:3000 droplink
 ```
 
 ### Railway
