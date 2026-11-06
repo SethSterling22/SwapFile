@@ -16,8 +16,8 @@
 const http    = require('http');
 const path    = require('path');
 const fs      = require('fs');
+const crypto  = require('crypto');
 const { WebSocketServer } = require('ws');
-const { v4: uuidv4 }      = require('uuid');
 
 // ─── Config ────────────────────────────────────────────────────────────────
 const PORT            = parseInt(process.env.PORT            ?? '3000',  10);
@@ -27,10 +27,46 @@ const MAX_SESSIONS    = parseInt(process.env.MAX_SESSIONS    ?? '50000',  10);
 const RATE_LIMIT      = parseInt(process.env.RATE_LIMIT_PER_MIN ?? '120', 10);
 const CORS_ORIGIN     = process.env.CORS_ORIGIN ?? '*';
 
+const MAX_PENDING     = 20; // max unanswered pair-requests queued per device
+
+// Close codes sent to the client
+const CLOSE_REPLACED  = 4001; // same device opened a newer connection (e.g. another tab)
+const CLOSE_EXPIRED   = 4002; // no messages for SESSION_TTL_MS
+
 // ─── In-memory device registry ─────────────────────────────────────────────
 // Map<deviceId, DeviceEntry>
-// DeviceEntry = { ws, name, pairedIds: Set<string>, msgCount: number, resetAt: number }
+// DeviceEntry = { ws, name, pairedIds: Set<string>, pendingFrom: Set<string>, _ttl }
+//   pairedIds   — devices this device has consented to (from its own localStorage
+//                 or a completed handshake). A link is only valid if it is mutual.
+//   pendingFrom — devices that sent a pair-request we have not answered yet
 const devices = new Map();
+
+// ─── Device identity ───────────────────────────────────────────────────────
+// The client keeps a random 256-bit secret in localStorage and sends it on
+// register. The public deviceId (shown in the QR) is derived from it, so
+// knowing a deviceId is not enough to impersonate that device.
+const SECRET_RE = /^[0-9a-f]{64}$/;
+const ID_RE     = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+function idFromSecret(secret) {
+  const h = crypto.createHash('sha256').update(secret).digest('hex');
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20, 32)}`;
+}
+
+function isMutualPair(idA, idB) {
+  const a = devices.get(idA);
+  const b = devices.get(idB);
+  return !!a && !!b && a.pairedIds.has(idB) && b.pairedIds.has(idA);
+}
+
+// Online devices that are mutually paired with `id`
+function* mutualPeers(id) {
+  const entry = devices.get(id);
+  if (!entry) return;
+  for (const pairedId of entry.pairedIds) {
+    if (isMutualPair(id, pairedId)) yield [pairedId, devices.get(pairedId)];
+  }
+}
 
 // ─── Minimal HTTP server (serves client + handles health check) ─────────────
 const CLIENT_DIR = path.join(__dirname, '..', 'client');
@@ -88,35 +124,34 @@ const wss = new WebSocketServer({ server, path: '/ws', maxPayload: MAX_MSG_BYTES
 
 wss.on('connection', (ws, req) => {
   let deviceId = null;
+  let msgCount = 0;
+  let resetAt  = Date.now() + 60_000;
   const ip = req.headers['x-forwarded-for']?.split(',')[0].trim() ?? req.socket.remoteAddress;
 
   // ── Helpers ──────────────────────────────────────────────────────────────
-  function send(targetWs, payload) {
-    if (targetWs.readyState === 1 /* OPEN */) {
-      targetWs.send(JSON.stringify(payload));
-    }
-  }
-
   function sendSelf(payload)  { send(ws, payload); }
 
-  function notifyPresence(targetDeviceId, online) {
-    const entry = devices.get(targetDeviceId);
-    if (!entry) return;
-    // Tell all of targetDevice's pairs about its new presence state
-    for (const pairedId of entry.pairedIds) {
-      const peer = devices.get(pairedId);
-      if (peer) send(peer.ws, { type: 'presence', deviceId: targetDeviceId, name: entry.name, online });
-    }
+  // Registry entry owned by THIS socket, or null if never registered,
+  // expired, or taken over by a newer connection of the same device.
+  function self() {
+    const entry = deviceId ? devices.get(deviceId) : null;
+    return entry && entry.ws === ws ? entry : null;
   }
 
+  // Rate limit is per socket, so it also applies before register
   function rateOk() {
-    if (!deviceId) return true;
-    const entry = devices.get(deviceId);
-    if (!entry) return true;
     const now = Date.now();
-    if (now > entry.resetAt) { entry.msgCount = 0; entry.resetAt = now + 60_000; }
-    entry.msgCount++;
-    return entry.msgCount <= RATE_LIMIT;
+    if (now > resetAt) { msgCount = 0; resetAt = now + 60_000; }
+    msgCount++;
+    return msgCount <= RATE_LIMIT;
+  }
+
+  // (Re)start the idle timer. On expiry the socket is closed, which cleans up
+  // the entry through the normal close path and lets the client reconnect.
+  function touch(entry) {
+    clearTimeout(entry._ttl);
+    entry._ttl = setTimeout(() => ws.close(CLOSE_EXPIRED, 'Session expired'), SESSION_TTL_MS);
+    entry._ttl.unref?.();
   }
 
   // ── Message handler ───────────────────────────────────────────────────────
@@ -131,102 +166,116 @@ wss.on('connection', (ws, req) => {
     try { msg = JSON.parse(raw); }
     catch { sendSelf({ type: 'error', code: 'INVALID_JSON', message: 'Invalid JSON' }); return; }
 
+    if (!msg || typeof msg !== 'object') {
+      sendSelf({ type: 'error', code: 'INVALID_JSON', message: 'Invalid JSON' });
+      return;
+    }
+
     if (!rateOk()) {
       sendSelf({ type: 'error', code: 'RATE_LIMITED', message: 'Too many messages' });
       return;
     }
 
+    // A bug in one handler must never take the whole server down
+    try {
+      handleMessage(msg);
+    } catch (err) {
+      console.error(`[ws] ${ip} error handling ${msg.type}:`, err);
+      sendSelf({ type: 'error', code: 'INTERNAL', message: 'Error interno del servidor' });
+    }
+  });
+
+  function handleMessage(msg) {
+    const me = self();
+    if (me) touch(me);
+
     switch (msg.type) {
 
       // ── register ─────────────────────────────────────────────────────────
-      // Client sends this on connect (or reconnect with existing deviceId)
+      // Client sends this on connect (and again when its name changes)
       case 'register': {
-        const requestedId = typeof msg.deviceId === 'string' && msg.deviceId.length === 36
-          ? msg.deviceId : null;
+        if (typeof msg.secret !== 'string' || !SECRET_RE.test(msg.secret)) {
+          sendSelf({ type: 'error', code: 'INVALID_SECRET', message: 'Identidad de dispositivo inválida' });
+          return;
+        }
+        const id = idFromSecret(msg.secret);
 
-        // Reuse existing ID if provided and not already taken by another socket
-        const existing = requestedId ? devices.get(requestedId) : null;
-        if (existing && existing.ws !== ws) {
-          // Previous session disconnected but entry wasn't cleaned yet — take it over
-          existing.ws = ws;
-          deviceId = requestedId;
-          devices.set(deviceId, existing);
-        } else if (existing && existing.ws === ws) {
-          // Already registered on this socket
-          deviceId = requestedId;
-        } else {
-          // New device
+        // A socket cannot switch identities once registered
+        if (deviceId && deviceId !== id) {
+          sendSelf({ type: 'error', code: 'ALREADY_REGISTERED', message: 'Conexión ya registrada' });
+          return;
+        }
+
+        let entry = devices.get(id);
+        if (entry && entry.ws !== ws) {
+          // Same device reconnecting (or a second tab): the newest socket wins.
+          // The old socket's close handler won't clean up, since it no longer owns the entry.
+          const oldWs = entry.ws;
+          entry.ws = ws;
+          oldWs.close(CLOSE_REPLACED, 'Replaced by a newer connection');
+        } else if (!entry) {
           if (devices.size >= MAX_SESSIONS) {
             sendSelf({ type: 'error', code: 'CAPACITY', message: 'Server at capacity' });
             ws.close(); return;
           }
-          deviceId = requestedId ?? uuidv4();
-          const pairedIds = Array.isArray(msg.pairedIds)
-            ? new Set(msg.pairedIds.filter(id => typeof id === 'string'))
-            : new Set();
-
-          devices.set(deviceId, {
+          entry = {
             ws,
-            name: String(msg.name ?? 'Dispositivo').slice(0, 60),
-            pairedIds,
-            msgCount: 0,
-            resetAt: Date.now() + 60_000,
-          });
+            name: 'Dispositivo',
+            pairedIds: new Set(),
+            pendingFrom: new Set(),
+          };
+          devices.set(id, entry);
         }
+        deviceId = id;
 
-        // Update name if changed
-        const entry = devices.get(deviceId);
         if (msg.name) entry.name = String(msg.name).slice(0, 60);
 
-        // Merge any newly-known pairedIds from client localStorage
+        // The client's localStorage is the source of truth for its own consent
         if (Array.isArray(msg.pairedIds)) {
-          for (const id of msg.pairedIds) {
-            if (typeof id === 'string') entry.pairedIds.add(id);
-          }
+          entry.pairedIds = new Set(msg.pairedIds.filter(p => typeof p === 'string' && ID_RE.test(p) && p !== id));
         }
 
         sendSelf({ type: 'registered', deviceId });
 
-        // Inform online pairs that this device is back
-        for (const pairedId of entry.pairedIds) {
-          const peer = devices.get(pairedId);
-          if (peer) {
-            send(peer.ws, { type: 'presence', deviceId, name: entry.name, online: true });
-            // Also tell this device which pairs are currently online
-            sendSelf({ type: 'presence', deviceId: pairedId, name: peer.name, online: true });
-          }
+        // Exchange presence only with devices that also list us as paired
+        for (const [pairedId, peer] of mutualPeers(deviceId)) {
+          send(peer.ws, { type: 'presence', deviceId, name: entry.name, online: true });
+          sendSelf({ type: 'presence', deviceId: pairedId, name: peer.name, online: true });
         }
 
-        // Schedule TTL cleanup (refreshed on each message via rateOk)
-        if (!entry._ttl) {
-          entry._ttl = setTimeout(() => {
-            if (devices.get(deviceId) === entry) cleanup(deviceId);
-          }, SESSION_TTL_MS);
-          entry._ttl.unref?.();
-        }
+        touch(entry);
         break;
       }
 
       // ── pair-request ─────────────────────────────────────────────────────
-      // Device A wants to pair with Device B (B is online, A scanned B's QR)
+      // Device B wants to pair with Device A (A is online, B scanned A's QR)
       case 'pair-request': {
-        if (!deviceId) { sendSelf({ type: 'error', code: 'NOT_REGISTERED' }); return; }
+        if (!me) { sendSelf({ type: 'error', code: 'NOT_REGISTERED' }); return; }
+        if (msg.to === deviceId) return;
         const target = devices.get(msg.to);
         if (!target) {
           sendSelf({ type: 'error', code: 'DEVICE_OFFLINE', message: 'El dispositivo no está conectado' });
           return;
         }
-        const me = devices.get(deviceId);
+        if (target.pendingFrom.size >= MAX_PENDING && !target.pendingFrom.has(deviceId)) {
+          sendSelf({ type: 'error', code: 'TOO_MANY_REQUESTS', message: 'El dispositivo tiene demasiadas solicitudes pendientes' });
+          return;
+        }
+        target.pendingFrom.add(deviceId);
         send(target.ws, { type: 'pair-request', from: { id: deviceId, name: me.name } });
         break;
       }
 
       // ── pair-accept ───────────────────────────────────────────────────────
+      // Only valid as an answer to a pair-request the other device actually sent
       case 'pair-accept': {
-        if (!deviceId) return;
+        if (!me) return;
+        if (!me.pendingFrom.delete(msg.to)) {
+          sendSelf({ type: 'error', code: 'NO_PENDING_REQUEST', message: 'No hay solicitud pendiente de ese dispositivo' });
+          return;
+        }
         const target = devices.get(msg.to);
-        const me     = devices.get(deviceId);
-        if (!target || !me) return;
+        if (!target) return;
 
         // Record pairing on server side
         me.pairedIds.add(msg.to);
@@ -241,7 +290,8 @@ wss.on('connection', (ws, req) => {
 
       // ── pair-reject ───────────────────────────────────────────────────────
       case 'pair-reject': {
-        if (!deviceId) return;
+        if (!me) return;
+        if (!me.pendingFrom.delete(msg.to)) return;
         const target = devices.get(msg.to);
         if (target) send(target.ws, { type: 'pair-rejected', from: { id: deviceId } });
         break;
@@ -249,8 +299,6 @@ wss.on('connection', (ws, req) => {
 
       // ── unpair ────────────────────────────────────────────────────────────
       case 'unpair': {
-        if (!deviceId) return;
-        const me = devices.get(deviceId);
         if (!me) return;
         me.pairedIds.delete(msg.with);
         const peer = devices.get(msg.with);
@@ -264,22 +312,23 @@ wss.on('connection', (ws, req) => {
       // ── signal ────────────────────────────────────────────────────────────
       // WebRTC SDP offer / answer / ICE candidate relay
       case 'signal': {
-        if (!deviceId) return;
-        const me     = devices.get(deviceId);
-        const target = devices.get(msg.to);
+        if (!me) return;
 
-        if (!target) {
-          sendSelf({ type: 'error', code: 'DEVICE_OFFLINE', message: 'El dispositivo receptor no está conectado' });
+        // Security: only relay between mutually paired devices
+        if (!devices.has(msg.to)) {
+          if (me.pairedIds.has(msg.to)) {
+            sendSelf({ type: 'error', code: 'DEVICE_OFFLINE', message: 'El dispositivo receptor no está conectado' });
+          } else {
+            sendSelf({ type: 'error', code: 'NOT_PAIRED', message: 'Dispositivos no vinculados' });
+          }
           return;
         }
-
-        // Security: only relay between paired devices
-        if (!me.pairedIds.has(msg.to) && !target.pairedIds.has(deviceId)) {
+        if (!isMutualPair(deviceId, msg.to)) {
           sendSelf({ type: 'error', code: 'NOT_PAIRED', message: 'Dispositivos no vinculados' });
           return;
         }
 
-        send(target.ws, { type: 'signal', from: deviceId, data: msg.data });
+        send(devices.get(msg.to).ws, { type: 'signal', from: deviceId, data: msg.data });
         break;
       }
 
@@ -291,23 +340,27 @@ wss.on('connection', (ws, req) => {
       default:
         sendSelf({ type: 'error', code: 'UNKNOWN_TYPE', message: `Unknown message type: ${msg.type}` });
     }
-  });
+  }
 
   // ── Disconnect ─────────────────────────────────────────────────────────
-  ws.on('close', () => { if (deviceId) cleanup(deviceId); });
+  // Only clean up if this socket still owns the entry (not replaced by a reconnect)
+  ws.on('close', () => { if (self()) cleanup(deviceId); });
   ws.on('error', (err) => { console.error(`[ws] ${ip} error:`, err.message); });
 });
+
+function send(targetWs, payload) {
+  if (targetWs.readyState === 1 /* OPEN */) {
+    targetWs.send(JSON.stringify(payload));
+  }
+}
 
 function cleanup(id) {
   const entry = devices.get(id);
   if (!entry) return;
   clearTimeout(entry._ttl);
   // Notify pairs
-  for (const pairedId of entry.pairedIds) {
-    const peer = devices.get(pairedId);
-    if (peer && peer.ws.readyState === 1) {
-      peer.ws.send(JSON.stringify({ type: 'presence', deviceId: id, name: entry.name, online: false }));
-    }
+  for (const [, peer] of mutualPeers(id)) {
+    send(peer.ws, { type: 'presence', deviceId: id, name: entry.name, online: false });
   }
   devices.delete(id);
 }

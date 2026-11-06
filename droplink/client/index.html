@@ -522,7 +522,8 @@ const STORAGE_KEY = 'droplink_v1';
 //  STATE
 // ═══════════════════════════════════════════════════════════════
 let state = {
-  deviceId:   null,
+  deviceSecret: null, // 256-bit hex, never leaves this device except to the server on register
+  deviceId:   null,   // public, derived by the server from deviceSecret
   deviceName: null,
   pairs:      [],   // [{id, name}]
   peers:      {},   // deviceId → {name, online: bool}
@@ -535,6 +536,7 @@ let pendingPairRequest = null; // {id, name}
 let sendTarget = null; // deviceId of current send target
 let selectedFile = null;
 let receivedFiles = []; // [{name, size, blob, url}]
+let migratedIdentity = false; // true if old pairs were dropped by the identity upgrade
 
 // ═══════════════════════════════════════════════════════════════
 //  PERSISTENCE (localStorage)
@@ -544,15 +546,25 @@ function loadState() {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return;
     const saved = JSON.parse(raw);
-    state.deviceId   = saved.deviceId   || null;
     state.deviceName = saved.deviceName || null;
-    state.pairs      = saved.pairs      || [];
+    if (saved.deviceSecret) {
+      state.deviceSecret = saved.deviceSecret;
+      state.deviceId     = saved.deviceId || null;
+      state.pairs        = saved.pairs    || [];
+    } else if (saved.deviceId) {
+      // Pre-secret version: the old deviceId can't be proven, so start a new
+      // identity. Old pairs point to IDs the other side no longer uses either.
+      state.deviceSecret = genSecret();
+      migratedIdentity   = (saved.pairs || []).length > 0;
+      saveState();
+    }
   } catch {}
 }
 
 function saveState() {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      deviceSecret: state.deviceSecret,
       deviceId:   state.deviceId,
       deviceName: state.deviceName,
       pairs:      state.pairs,
@@ -560,12 +572,19 @@ function saveState() {
   } catch {}
 }
 
-function genId() {
-  if (crypto.randomUUID) return crypto.randomUUID();
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
-    const r = Math.random() * 16 | 0;
-    return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
-  });
+// crypto.getRandomValues works on plain HTTP too (LAN testing), unlike crypto.subtle
+function genSecret() {
+  const bytes = crypto.getRandomValues(new Uint8Array(32));
+  return Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
+}
+
+function registerMsg() {
+  return {
+    type:      'register',
+    secret:    state.deviceSecret,
+    name:      state.deviceName,
+    pairedIds: state.pairs.map(p => p.id),
+  };
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -577,15 +596,10 @@ function connectWS() {
     wsReady = true;
     updateConnBadge(true);
     // Register with server
-    wsSend({
-      type:      'register',
-      deviceId:  state.deviceId,
-      name:      state.deviceName,
-      pairedIds: state.pairs.map(p => p.id),
-    });
+    wsSend(registerMsg());
   };
 
-  ws.onclose = () => {
+  ws.onclose = (ev) => {
     wsReady = false;
     updateConnBadge(false);
     // Mark all peers offline
@@ -593,6 +607,11 @@ function connectWS() {
       state.peers[id].online = false;
     }
     renderPeers();
+    // Another tab of this browser took over the session — don't fight it
+    if (ev.code === 4001) {
+      document.getElementById('conn-label').textContent = 'Abierto en otra pestaña';
+      return;
+    }
     // Reconnect after 3 s
     setTimeout(connectWS, 3000);
   };
@@ -689,6 +708,8 @@ function removePair(id) {
 //  WEBRTC — SIGNAL HANDLING
 // ═══════════════════════════════════════════════════════════════
 async function handleSignal(fromId, data) {
+  // Defense in depth: the server already checks this
+  if (!state.pairs.find(p => p.id === fromId) || !data) return;
   if (data.type === 'offer') {
     // We are the receiver
     const pc = getOrCreatePC(fromId, false);
@@ -859,7 +880,7 @@ function updateConnBadge(online) {
 
 function updateMyCard() {
   document.getElementById('my-name').textContent = state.deviceName;
-  document.getElementById('my-id').textContent   = state.deviceId?.slice(0, 8) + '…';
+  document.getElementById('my-id').textContent   = state.deviceId ? state.deviceId.slice(0, 8) + '…' : '—';
   document.getElementById('my-avatar').textContent = deviceEmoji(state.deviceName);
 }
 
@@ -961,6 +982,7 @@ function escHtml(s) {
 // ─── QR Modal ─────────────────────────────────────────────────────────────
 let qrInstance = null;
 function showQRModal() {
+  if (!state.deviceId) { toast('Conectando con el servidor…'); return; }
   const pairUrl = `${location.origin}/?pair=${state.deviceId}&pname=${encodeURIComponent(state.deviceName)}`;
   document.getElementById('qr-url-text').textContent = pairUrl;
 
@@ -1031,8 +1053,8 @@ function checkPairParam() {
 document.getElementById('setup-btn').addEventListener('click', () => {
   const name = document.getElementById('setup-name').value.trim();
   if (!name) { toast('Ingresa un nombre para este dispositivo'); return; }
-  state.deviceName = name;
-  state.deviceId   = state.deviceId || genId();
+  state.deviceName   = name;
+  state.deviceSecret = state.deviceSecret || genSecret();
   saveState();
   bootApp();
 });
@@ -1047,7 +1069,7 @@ document.getElementById('edit-name-btn').addEventListener('click', () => {
     state.deviceName = name.trim();
     saveState();
     updateMyCard();
-    if (wsReady) wsSend({ type: 'register', deviceId: state.deviceId, name: state.deviceName, pairedIds: state.pairs.map(p => p.id) });
+    if (wsReady) wsSend(registerMsg());
   }
 });
 
@@ -1144,6 +1166,7 @@ function bootApp() {
   showScreen('screen-home');
   connectWS();
   checkPairParam();
+  if (migratedIdentity) toast('🔐 Seguridad actualizada: vuelve a vincular tus dispositivos', 6000);
 }
 
 // Start
