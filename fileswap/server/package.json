@@ -1,7 +1,7 @@
 {
-  "name": "droplink-server",
+  "name": "fileswap-server",
   "version": "1.0.0",
-  "description": "DropLink signaling server — WebRTC P2P anonymous file transfer",
+  "description": "FileSwap signaling server — WebRTC P2P anonymous file transfer",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",

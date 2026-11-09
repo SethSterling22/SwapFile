@@ -1,0 +1,1722 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+  <meta name="theme-color" content="#eee7d3" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <title>FileSwap</title>
+  <script>
+    // Apply the theme before first paint (saved choice, else the OS preference)
+    (function () {
+      var saved = null;
+      try { saved = localStorage.getItem('fileswap_theme'); } catch (e) {}
+      var dark = saved ? saved === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+      document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+    })();
+  </script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" crossorigin="anonymous"></script>
+  <style>
+    /* ───────────────────────────── Reset & Base ───────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    /* Light: cream paper + manila folders */
+    :root {
+      --bg:          #eee7d3;
+      --grid:        rgba(122, 96, 48, .08);
+      --paper:       #fbf6e7;
+      --paper-2:     #f4ecd6;
+      --manila:      #e9cc7f;
+      --manila-2:    #ddb860;
+      --kraft:       #a8773a;
+      --border:      #c9b384;
+      --rule:        rgba(80, 110, 160, .16);
+      --margin-line: #d9776b;
+      --ink:         #2b2418;
+      --muted:       #76674c;
+      --blue-ink:    #2f4f86;
+      --green:       #4c7a34;
+      --red:         #b53b2c;
+      --shadow:      0 1px 0 rgba(80, 60, 20, .12), 0 3px 8px rgba(80, 60, 20, .10);
+      --radius:      4px;
+      --radius-sm:   3px;
+      --font:        -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      --font-title:  Georgia, 'Times New Roman', serif;
+      --font-mono:   'Courier New', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+    }
+
+    /* Dark: kraft folder at night */
+    [data-theme="dark"] {
+      --bg:          #1c1812;
+      --grid:        rgba(233, 204, 127, .045);
+      --paper:       #2a241a;
+      --paper-2:     #332b1f;
+      --manila:      #c9a552;
+      --manila-2:    #b38f3e;
+      --kraft:       #d8a964;
+      --border:      #4d412d;
+      --rule:        rgba(150, 175, 220, .10);
+      --margin-line: #a8594f;
+      --ink:         #efe5cc;
+      --muted:       #a99a7a;
+      --blue-ink:    #8fb0e8;
+      --green:       #8cbf6a;
+      --red:         #e07a6a;
+      --shadow:      0 1px 0 rgba(0, 0, 0, .35), 0 4px 10px rgba(0, 0, 0, .30);
+    }
+
+    html, body { height: 100%; }
+
+    body {
+      font-family: var(--font);
+      color: var(--ink);
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+      /* graph-paper desk */
+      background-color: var(--bg);
+      background-image:
+        linear-gradient(var(--grid) 1px, transparent 1px),
+        linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+      background-size: 22px 22px;
+      transition: background-color .25s, color .25s;
+    }
+
+    /* ───────────────────────────── Layout ─────────────────────────────────── */
+    #app {
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      max-width: 520px;
+      margin: 0 auto;
+      padding: 0 0 env(safe-area-inset-bottom, 20px);
+    }
+
+    /* ───────────────────────────── Header ─────────────────────────────────── */
+    header {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 18px 20px 0;
+      border-bottom: 2px solid var(--kraft);
+      position: sticky;
+      top: 0;
+      background: var(--bg);
+      z-index: 10;
+    }
+    /* Logo as a folder tab */
+    .logo {
+      font-family: var(--font-title);
+      font-size: 1.35rem; font-weight: 700; letter-spacing: .2px;
+      color: var(--ink);
+      background: var(--manila);
+      border: 1.5px solid var(--manila-2);
+      border-bottom: none;
+      border-radius: var(--radius) var(--radius) 0 0;
+      padding: 7px 16px 6px;
+    }
+    [data-theme="dark"] .logo { color: #2b2418; }
+    .logo span { color: var(--red); }
+    [data-theme="dark"] .logo span { color: #8a2f22; }
+    .header-right { display: flex; align-items: center; gap: 10px; padding-bottom: 8px; }
+    .connection-badge {
+      display: flex; align-items: center; gap: 6px;
+      font-size: .72rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+      color: var(--muted);
+    }
+    .dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--red); transition: background .3s;
+    }
+    .dot.online { background: var(--green); }
+    .theme-toggle {
+      background: var(--paper); color: var(--ink);
+      border: 1.5px solid var(--border); border-radius: var(--radius-sm);
+      width: 32px; height: 32px; font-size: .95rem; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .theme-toggle:hover { border-color: var(--kraft); }
+    .theme-toggle.lang-toggle { width: auto; min-width: 32px; padding: 0 8px; font-size: .72rem; font-weight: 800; letter-spacing: .06em; }
+
+    /* ───────────────────────────── Screens ────────────────────────────────── */
+    .screen { display: none; flex-direction: column; flex: 1; }
+    .screen.active { display: flex; }
+
+    /* ───────────────────────────── Paper sheet ────────────────────────────── */
+    .sheet {
+      background: var(--paper);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      box-shadow: var(--shadow);
+    }
+
+    /* ───────────────────────────── Setup screen ────────────────────────────── */
+    #screen-setup { padding: 36px 20px; justify-content: center; }
+    .setup-card {
+      padding: 32px 26px 28px 44px;
+      display: flex; flex-direction: column; gap: 22px;
+      position: relative;
+      /* notebook rules + red margin */
+      background-image:
+        linear-gradient(90deg, transparent 30px, var(--margin-line) 30px, var(--margin-line) 31.5px, transparent 31.5px),
+        repeating-linear-gradient(var(--paper) 0 27px, var(--rule) 27px 28px);
+    }
+    .setup-icon { font-size: 2.6rem; }
+    .setup-title { font-family: var(--font-title); font-size: 1.6rem; font-weight: 700; }
+    .setup-sub { color: var(--muted); font-size: .92rem; line-height: 1.55; }
+    .input-row { width: 100%; display: flex; flex-direction: column; gap: 6px; }
+    .input-row label {
+      font-size: .72rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+      color: var(--muted);
+    }
+    .input-row input, .code-input {
+      width: 100%;
+      padding: 12px 14px;
+      background: var(--paper-2);
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--ink);
+      font-size: 1rem;
+      font-family: var(--font);
+      outline: none;
+      transition: border-color .2s;
+    }
+    .code-input { font-family: var(--font-mono); font-size: .88rem; }
+    .input-row input:focus, .code-input:focus { border-color: var(--kraft); }
+    .input-row input::placeholder, .code-input::placeholder { color: var(--muted); opacity: .8; }
+
+    /* ───────────────────────────── Buttons ─────────────────────────────────── */
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      padding: 12px 20px;
+      border: 1.5px solid transparent; border-radius: var(--radius-sm);
+      font-size: .93rem; font-weight: 700; font-family: var(--font);
+      cursor: pointer; transition: transform .08s, box-shadow .08s, background .15s;
+      text-decoration: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .btn:disabled { opacity: .5; cursor: not-allowed; }
+    .btn-primary {
+      background: var(--manila); color: #2b2418; width: 100%;
+      border-color: var(--manila-2);
+      box-shadow: 0 2px 0 var(--kraft);
+    }
+    .btn-primary:hover:not(:disabled) { background: var(--manila-2); }
+    .btn-primary:active:not(:disabled) { transform: translateY(2px); box-shadow: 0 0 0 var(--kraft); }
+    .btn-ghost {
+      background: var(--paper); color: var(--ink);
+      border-color: var(--border);
+    }
+    .btn-ghost:hover { border-color: var(--kraft); }
+    .btn-ghost:active { transform: translateY(1px); }
+    .btn-sm { padding: 7px 12px; font-size: .8rem; }
+    .btn-row { display: flex; gap: 8px; }
+    .btn-row .btn { flex: 1; }
+
+    /* ───────────────────────────── Home screen ─────────────────────────────── */
+    #screen-home { padding: 0; overflow-y: auto; }
+    .home-inner { padding: 22px 20px; display: flex; flex-direction: column; gap: 26px; flex: 1; }
+
+    /* My device = flat manila folder with a tab */
+    .folder {
+      position: relative;
+      margin-top: 22px;
+      background: var(--manila);
+      border: 1.5px solid var(--manila-2);
+      border-radius: 0 var(--radius) var(--radius) var(--radius);
+      color: #2b2418;
+    }
+    .folder::before {
+      content: attr(data-tab);
+      position: absolute; left: -1.5px; top: -23px;
+      height: 23px; padding: 4px 14px 0;
+      background: var(--manila);
+      border: 1.5px solid var(--manila-2); border-bottom: none;
+      border-radius: var(--radius) var(--radius) 0 0;
+      font-size: .66rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase;
+      color: #5a4520;
+    }
+    .my-device-card {
+      padding: 16px 16px 14px;
+      display: grid; align-items: center;
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      grid-template-areas: "avatar name edit" "avatar id edit";
+      column-gap: 14px; row-gap: 6px;
+    }
+    .device-avatar {
+      grid-area: avatar;
+      width: 46px; height: 46px; border-radius: var(--radius-sm);
+      background: #fbf6e7; border: 1.5px solid #b89545;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.4rem; flex-shrink: 0;
+    }
+    .device-name { grid-area: name; font-family: var(--font-title); font-weight: 700; font-size: 1.1rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .my-device-card #edit-name-btn { grid-area: edit; }
+    .device-id-row { grid-area: id; display: flex; align-items: center; gap: 6px; min-width: 0; }
+    /* the UUID printed on a label strip */
+    .device-id {
+      font-family: var(--font-mono); font-size: .74rem; font-weight: 700;
+      background: #fbf6e7; color: #2b2418;
+      border: 1px dashed #b89545; border-radius: 2px;
+      padding: 3px 7px; cursor: pointer;
+      min-width: 0; overflow-wrap: anywhere;
+    }
+    .device-id:hover { border-style: solid; }
+    .copy-icon-btn {
+      flex-shrink: 0;
+      width: 28px; height: 26px;
+      display: inline-flex; align-items: center; justify-content: center;
+      background: #fbf6e7; color: #2b2418;
+      border: 1px solid #b89545; border-radius: 2px;
+      cursor: pointer;
+    }
+    .copy-icon-btn:hover { background: #fff; }
+    .copy-icon-btn svg { width: 15px; height: 15px; }
+    .folder .btn-ghost { background: #fbf6e7; color: #2b2418; border-color: #b89545; }
+
+    .section-title {
+      display: flex; align-items: center; gap: 10px;
+      font-size: .72rem; font-weight: 800; letter-spacing: .1em;
+      color: var(--muted); text-transform: uppercase;
+      margin-bottom: 12px;
+    }
+    .section-title::after { content: ''; flex: 1; border-top: 1.5px solid var(--border); }
+
+    .peers-list { display: flex; flex-direction: column; gap: 10px; }
+
+    /* Peers = index cards with a red margin */
+    .peer-card {
+      background: var(--paper);
+      border: 1px solid var(--border);
+      border-left: 4px solid var(--margin-line);
+      border-radius: var(--radius-sm);
+      box-shadow: var(--shadow);
+      padding: 12px 14px;
+      display: flex; align-items: center; gap: 12px;
+      transition: transform .12s, border-color .2s;
+      position: relative;
+    }
+    .peer-card.online { border-left-color: var(--green); cursor: pointer; }
+    .peer-card.online:hover { transform: translateY(-1px); }
+    .peer-avatar {
+      width: 40px; height: 40px; border-radius: var(--radius-sm);
+      background: var(--paper-2); border: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.2rem; flex-shrink: 0; position: relative;
+    }
+    .peer-status {
+      position: absolute; bottom: -3px; right: -3px;
+      width: 11px; height: 11px; border-radius: 50%;
+      background: var(--muted); border: 2px solid var(--paper);
+      transition: background .3s;
+    }
+    .peer-status.online { background: var(--green); }
+    .peer-info { flex: 1; min-width: 0; }
+    .peer-name { font-weight: 700; font-size: .95rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .peer-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin-top: 5px; }
+    .peer-id { font-family: var(--font-mono); font-size: .72rem; color: var(--muted); }
+    .peer-hint { font-size: .74rem; color: var(--green); font-weight: 600; }
+    /* rubber stamp */
+    .peer-label {
+      display: inline-block;
+      font-size: .64rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase;
+      color: var(--muted);
+      border: 1.5px solid currentColor; border-radius: 2px;
+      padding: 1px 6px; white-space: nowrap;
+      transform: rotate(-1.5deg);
+    }
+    .peer-label.online { color: var(--green); }
+    .peer-actions { display: flex; gap: 6px; align-items: center; }
+
+    .empty-state {
+      text-align: center; padding: 30px 20px;
+      color: var(--muted); font-size: .9rem; line-height: 1.6;
+      border: 1.5px dashed var(--border); border-radius: var(--radius-sm);
+      background: var(--paper);
+    }
+    .empty-state .icon { font-size: 2.2rem; margin-bottom: 10px; }
+
+    /* ───────────────────────────── Add device bar ───────────────────────────── */
+    .add-device-btn {
+      background: transparent;
+      border: 1.5px dashed var(--kraft);
+      border-radius: var(--radius-sm);
+      padding: 13px;
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      color: var(--kraft); font-size: .9rem; font-weight: 700;
+      cursor: pointer; transition: background .2s;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .add-device-btn:hover { background: var(--paper); }
+
+    /* ───────────────────────────── Received files ───────────────────────────── */
+    .received-section { display: flex; flex-direction: column; gap: 10px; }
+    /* receipts with a staple */
+    .received-card {
+      background: var(--paper);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      box-shadow: var(--shadow);
+      padding: 14px 16px;
+      display: flex; align-items: center; gap: 12px;
+      position: relative;
+    }
+    .received-card::before {
+      content: ''; position: absolute; top: -3px; left: 18px;
+      width: 22px; height: 5px; border-radius: 1px;
+      background: linear-gradient(#cfcfcf, #8f8f8f);
+    }
+    .received-card .file-icon { font-size: 1.6rem; flex-shrink: 0; }
+    .received-card .file-info { flex: 1; min-width: 0; }
+    .received-card .file-name { font-weight: 700; font-size: .9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .received-card .file-meta { font-family: var(--font-mono); font-size: .74rem; color: var(--muted); margin-top: 2px; }
+    .received-card a {
+      color: var(--blue-ink); font-size: .82rem; font-weight: 700;
+      text-decoration: underline; text-underline-offset: 3px; white-space: nowrap;
+    }
+
+    /* ───────────────────────────── Modals ──────────────────────────────────── */
+    .modal-overlay {
+      display: none; position: fixed; inset: 0;
+      background: rgba(30, 22, 10, .55); backdrop-filter: blur(2px);
+      z-index: 100; align-items: flex-end; justify-content: center;
+    }
+    .modal-overlay.open { display: flex; }
+
+    .modal {
+      background: var(--paper);
+      border: 1px solid var(--border);
+      border-top: 6px solid var(--manila);
+      border-radius: var(--radius) var(--radius) 0 0;
+      box-shadow: var(--shadow);
+      padding: 24px 22px calc(24px + env(safe-area-inset-bottom, 0px));
+      width: 100%; max-width: 520px; max-height: 92dvh; overflow-y: auto;
+      display: flex; flex-direction: column; gap: 16px;
+      animation: slideUp .22s ease;
+    }
+    @media (min-width: 540px) {
+      .modal-overlay { align-items: center; }
+      .modal { border-radius: var(--radius); max-width: 440px; }
+    }
+    @keyframes slideUp {
+      from { transform: translateY(30px); opacity: 0; }
+      to   { transform: translateY(0);    opacity: 1; }
+    }
+
+    .modal-title { font-family: var(--font-title); font-size: 1.25rem; font-weight: 700; }
+    .modal-sub   { font-size: .87rem; color: var(--muted); line-height: 1.5; }
+    .modal-actions { display: flex; gap: 10px; flex-direction: column; }
+
+    .field-label {
+      font-size: .7rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase;
+      color: var(--muted);
+    }
+    .divider {
+      display: flex; align-items: center; gap: 10px;
+      color: var(--muted); font-size: .75rem; font-weight: 700; text-transform: uppercase; letter-spacing: .1em;
+    }
+    .divider::before, .divider::after { content: ''; flex: 1; border-top: 1.5px dashed var(--border); }
+
+    /* Link modal */
+    #qr-container {
+      display: flex; align-items: center; justify-content: center;
+      background: #fff; border: 1px solid var(--border); border-radius: var(--radius-sm);
+      padding: 12px; margin: 0 auto;
+      width: 196px; height: 196px;
+    }
+    #qr-container canvas, #qr-container img { width: 170px !important; height: 170px !important; }
+    .code-box {
+      background: var(--manila); color: #2b2418;
+      border: 1.5px solid var(--manila-2); border-radius: var(--radius-sm);
+      padding: 10px 12px; text-align: center;
+      font-family: var(--font-mono); font-size: .9rem; font-weight: 700; letter-spacing: .02em;
+      word-break: break-all; user-select: all;
+    }
+    .qr-url {
+      font-size: .7rem; color: var(--muted);
+      word-break: break-all; text-align: center;
+      font-family: var(--font-mono);
+    }
+    .pair-code-row { display: flex; gap: 8px; }
+    .pair-code-row .btn { width: auto; flex-shrink: 0; }
+
+    /* Send modal */
+    .file-drop-zone {
+      border: 2px dashed var(--kraft);
+      border-radius: var(--radius-sm);
+      background: var(--paper-2);
+      padding: 30px 20px;
+      text-align: center;
+      cursor: pointer;
+      transition: background .2s;
+    }
+    .file-drop-zone:hover, .file-drop-zone.drag-over { background: var(--manila); color: #2b2418; }
+    .file-drop-zone input { display: none; }
+    .file-drop-icon { font-size: 2rem; margin-bottom: 8px; }
+    .file-drop-text { font-size: .88rem; color: var(--muted); }
+    .file-drop-text strong { color: var(--ink); }
+    .file-drop-zone:hover .file-drop-text, .file-drop-zone.drag-over .file-drop-text,
+    .file-drop-zone:hover .file-drop-text strong, .file-drop-zone.drag-over .file-drop-text strong { color: #2b2418; }
+
+    .selected-file {
+      display: none;
+      background: var(--paper-2); border: 1px solid var(--border); border-radius: var(--radius-sm);
+      padding: 10px 12px; gap: 10px; align-items: center;
+    }
+    .selected-file.visible { display: flex; }
+    .selected-file-icon { font-size: 1.4rem; }
+    .selected-file-info { flex: 1; min-width: 0; }
+    .selected-file-name { font-size: .88rem; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .selected-file-size { font-family: var(--font-mono); font-size: .75rem; color: var(--muted); }
+
+    /* Progress = strip of manila tape */
+    .progress-wrap { display: flex; flex-direction: column; gap: 8px; }
+    .progress-bar-bg {
+      background: var(--paper-2); border: 1px solid var(--border); border-radius: 2px;
+      height: 12px; overflow: hidden;
+    }
+    .progress-bar-fill {
+      height: 100%;
+      background: repeating-linear-gradient(-45deg, var(--manila) 0 8px, var(--manila-2) 8px 16px);
+      transition: width .1s;
+      width: 0%;
+    }
+    .progress-label { font-family: var(--font-mono); font-size: .8rem; color: var(--muted); text-align: center; }
+
+    /* Toast = sticky note */
+    #toast {
+      position: fixed; bottom: calc(24px + env(safe-area-inset-bottom, 0px)); left: 50%;
+      transform: translateX(-50%) translateY(120px) rotate(-1deg);
+      background: #f7e27a; color: #2b2418;
+      border-radius: 2px; padding: 11px 18px;
+      box-shadow: 0 4px 10px rgba(60, 40, 0, .25);
+      font-size: .86rem; font-weight: 600;
+      transition: transform .3s; z-index: 999;
+      width: max-content; max-width: calc(100vw - 32px);
+      text-align: center;
+    }
+    #toast.show { transform: translateX(-50%) translateY(0) rotate(-1deg); }
+
+    /* Pair request */
+    #pair-request-modal .requester-name {
+      font-family: var(--font-title); font-weight: 700; font-size: 1.05rem; color: var(--ink);
+    }
+
+    /* Transfer overlay */
+    #transfer-modal .transfer-info { font-size: .9rem; color: var(--muted); text-align: center; }
+    #transfer-modal .transfer-filename { font-weight: 700; color: var(--ink); }
+
+    /* ───────────────────────────── Phones ──────────────────────────────────── */
+    @media (max-width: 480px) {
+      header { padding: 14px 14px 0; }
+      .theme-toggle { width: 38px; height: 38px; }
+      .theme-toggle.lang-toggle { width: auto; min-width: 38px; }
+      #screen-setup { padding: 20px 14px; }
+      .setup-card { padding: 26px 18px 22px 40px; }
+      .home-inner { padding: 18px 14px; gap: 22px; }
+      /* UUID gets its own full-width row under the name */
+      .my-device-card {
+        padding: 14px;
+        grid-template-areas: "avatar name edit" "id id id";
+        row-gap: 12px;
+      }
+      .device-id { font-size: .72rem; }
+      .copy-icon-btn { width: 34px; height: 30px; }
+      .modal { padding: 20px 16px calc(20px + env(safe-area-inset-bottom, 0px)); }
+      .code-box { font-size: .8rem; letter-spacing: 0; padding: 10px 8px; }
+      /* 16px stops iOS Safari from zooming into the field on focus */
+      .code-input, .input-row input { font-size: 16px; }
+      .pair-code-row { flex-direction: column; }
+      .pair-code-row .btn { width: 100%; }
+    }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+  </style>
+</head>
+<body>
+
+<div id="app">
+  <header>
+    <div class="logo">File<span>Swap</span></div>
+    <div class="header-right">
+      <div class="connection-badge">
+        <div class="dot" id="conn-dot"></div>
+        <span id="conn-label">Conectando…</span>
+      </div>
+      <button class="theme-toggle lang-toggle" id="lang-toggle" data-i18n-title="lang.title" title="Change language to English">ES</button>
+      <button class="theme-toggle" id="theme-toggle" data-i18n-title="theme.title" title="Cambiar tema claro / oscuro">☾</button>
+    </div>
+  </header>
+
+  <!-- ───── SETUP SCREEN ───── -->
+  <div class="screen" id="screen-setup">
+    <div class="sheet setup-card">
+      <div class="setup-icon">🗂️</div>
+      <div>
+        <div class="setup-title" data-i18n="setup.title">Bienvenido a FileSwap</div>
+        <div class="setup-sub" style="margin-top:8px" data-i18n-html="setup.sub">
+          Transferencia de archivos directa entre dispositivos, sin servidores en el medio.
+          Este dispositivo recibirá un <strong>código único</strong> (UUID) para vincularse; el nombre es solo para reconocerlo.
+        </div>
+      </div>
+      <div class="input-row">
+        <label for="setup-name" data-i18n="setup.nameLabel">Nombre de este dispositivo</label>
+        <input id="setup-name" type="text" maxlength="50" data-i18n-placeholder="setup.placeholder" placeholder="Ej: PC Oficina, MacBook Ana…" autocomplete="off" />
+      </div>
+      <button class="btn btn-primary" id="setup-btn" data-i18n="setup.start">Comenzar →</button>
+    </div>
+  </div>
+
+  <!-- ───── HOME SCREEN ───── -->
+  <div class="screen" id="screen-home">
+    <div class="home-inner">
+
+      <!-- My device -->
+      <div class="folder" data-tab="Este dispositivo" data-i18n-tab="home.thisDevice">
+        <div class="my-device-card">
+          <div class="device-avatar" id="my-avatar">📱</div>
+          <div class="device-name" id="my-name">—</div>
+          <div class="device-id-row">
+            <span class="device-id" id="my-id" data-i18n-title="home.copyCode" title="Copiar código">—</span>
+            <button class="copy-icon-btn" id="copy-my-id-btn" data-i18n-title="home.copyCode" title="Copiar código" aria-label="Copiar código">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <rect x="9" y="9" width="12" height="12" rx="1"></rect>
+                <path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"></path>
+              </svg>
+            </button>
+          </div>
+          <button class="btn btn-ghost btn-sm" id="edit-name-btn" data-i18n-title="home.editName" title="Editar nombre" aria-label="Editar nombre">✏️</button>
+        </div>
+      </div>
+
+      <!-- Connected devices -->
+      <div>
+        <div class="section-title" data-i18n="home.linked">Dispositivos vinculados</div>
+        <div class="peers-list" id="peers-list"></div>
+        <div style="margin-top:12px">
+          <div class="add-device-btn" id="add-device-btn">
+            <span style="font-size:1.1rem">＋</span> <span data-i18n="home.addDevice">Vincular nuevo dispositivo</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Received files -->
+      <div id="received-section" style="display:none">
+        <div class="section-title" data-i18n="home.received">Archivos recibidos</div>
+        <div class="received-section" id="received-list"></div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ───── MODAL: Vincular ───── -->
+<div class="modal-overlay" id="qr-modal">
+  <div class="modal">
+    <div>
+      <div class="modal-title" data-i18n="link.title">Vincular dispositivo</div>
+      <div class="modal-sub" style="margin-top:4px" data-i18n="link.sub">Comparte tu código con el otro dispositivo, o escribe aquí el suyo.</div>
+    </div>
+
+    <div class="field-label" data-i18n="link.yourCode">Tu código</div>
+    <div id="qr-container"></div>
+    <div class="code-box" id="my-code">—</div>
+    <div class="btn-row">
+      <button class="btn btn-ghost btn-sm" id="copy-code-btn" data-i18n="link.copyCode">📋 Copiar código</button>
+      <button class="btn btn-ghost btn-sm" id="copy-link-btn" data-i18n="link.copyLink">🔗 Copiar enlace</button>
+    </div>
+    <div class="qr-url" id="qr-url-text">—</div>
+
+    <div class="divider" data-i18n="link.or">o</div>
+
+    <label class="field-label" for="pair-code-input" data-i18n="link.otherCode">Código del otro dispositivo</label>
+    <div class="pair-code-row">
+      <input class="code-input" id="pair-code-input" type="text" autocomplete="off" spellcheck="false"
+             placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" />
+      <button class="btn btn-primary" id="pair-code-btn" data-i18n="link.pair">Vincular</button>
+    </div>
+    <div class="modal-sub" style="font-size:.78rem" data-i18n="link.hint">También puedes pegar el enlace completo. El otro dispositivo debe estar abierto para aceptar.</div>
+
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="qr-close-btn" data-i18n="common.close">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ───── MODAL: Solicitud de vinculación ───── -->
+<div class="modal-overlay" id="pair-request-modal">
+  <div class="modal">
+    <div class="modal-title" data-i18n="request.title">📨 Solicitud de vinculación</div>
+    <div class="modal-sub">
+      <span class="requester-name" id="requester-name">—</span>
+      <span data-i18n="request.wants">quiere vincularse contigo.</span>
+    </div>
+    <div>
+      <div class="field-label" style="margin-bottom:6px" data-i18n="request.code">Código del dispositivo</div>
+      <div class="code-box" id="requester-id">—</div>
+    </div>
+    <div class="modal-sub" style="font-size:.78rem" data-i18n="request.warning">Acepta solo si reconoces este código: el nombre lo elige cada dispositivo y puede repetirse.</div>
+    <div class="modal-actions">
+      <button class="btn btn-primary" id="pair-accept-btn" data-i18n="request.accept">✓ Aceptar</button>
+      <button class="btn btn-ghost" id="pair-reject-btn" data-i18n="request.reject">Rechazar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ───── MODAL: Enviar archivo ───── -->
+<div class="modal-overlay" id="send-modal">
+  <div class="modal">
+    <div>
+      <div class="modal-title" data-i18n="send.title">Enviar archivo</div>
+      <div class="modal-sub" style="margin-top:4px">→ <strong id="send-target-name">—</strong></div>
+    </div>
+
+    <div class="file-drop-zone" id="drop-zone">
+      <input type="file" id="file-input" />
+      <div class="file-drop-icon">📂</div>
+      <div class="file-drop-text" data-i18n-html="send.drop"><strong>Elige un archivo</strong><br>o arrástralo aquí</div>
+    </div>
+
+    <div class="selected-file" id="selected-file">
+      <div class="selected-file-icon" id="selected-icon">📄</div>
+      <div class="selected-file-info">
+        <div class="selected-file-name" id="selected-name">—</div>
+        <div class="selected-file-size" id="selected-size">—</div>
+      </div>
+      <button class="btn btn-ghost btn-sm" id="clear-file-btn">✕</button>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn btn-primary" id="send-btn" disabled data-i18n="send.send">Enviar</button>
+      <button class="btn btn-ghost" id="send-cancel-btn" data-i18n="common.cancel">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ───── MODAL: Progreso de transferencia ───── -->
+<div class="modal-overlay" id="transfer-modal">
+  <div class="modal">
+    <div class="modal-title" id="transfer-title">Enviando…</div>
+    <div class="transfer-info">
+      <span class="transfer-filename" id="transfer-filename">—</span>
+    </div>
+    <div class="progress-wrap">
+      <div class="progress-bar-bg"><div class="progress-bar-fill" id="progress-fill"></div></div>
+      <div class="progress-label" id="progress-label">0%</div>
+    </div>
+    <button class="btn btn-ghost" id="transfer-cancel-btn" style="display:none" data-i18n="common.cancel">Cancelar</button>
+  </div>
+</div>
+
+<!-- ───── TOAST ───── -->
+<div id="toast"></div>
+
+<script>
+'use strict';
+
+// ═══════════════════════════════════════════════════════════════
+//  CONFIG
+// ═══════════════════════════════════════════════════════════════
+const WS_URL = (() => {
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  return `${proto}//${location.host}/ws`;
+})();
+
+const ICE_SERVERS = [
+  { urls: 'stun:stun.l.google.com:19302' },
+  { urls: 'stun:stun1.l.google.com:19302' },
+];
+
+const CHUNK_SIZE  = 16 * 1024; // 16 KB per DataChannel chunk
+const STORAGE_KEY        = 'fileswap_v1';
+const LEGACY_STORAGE_KEY = 'droplink_v1'; // app was called DropLink before
+const THEME_KEY          = 'fileswap_theme';
+const LANG_KEY           = 'fileswap_lang';
+const UUID_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+
+// ═══════════════════════════════════════════════════════════════
+//  I18N — Español / English
+// ═══════════════════════════════════════════════════════════════
+// Static markup uses data-i18n (text), data-i18n-html (trusted markup),
+// data-i18n-placeholder, data-i18n-title and data-i18n-tab; JS uses t().
+const I18N = {
+  es: {
+    'conn.connecting':    'Conectando…',
+    'conn.online':        'Conectado',
+    'conn.reconnecting':  'Reconectando…',
+    'conn.replaced':      'Abierto en otra pestaña',
+    'theme.title':        'Cambiar tema claro / oscuro',
+    'lang.title':         'Change language to English',
+
+    'setup.title':        'Bienvenido a FileSwap',
+    'setup.sub':          'Transferencia de archivos directa entre dispositivos, sin servidores en el medio. Este dispositivo recibirá un <strong>código único</strong> (UUID) para vincularse; el nombre es solo para reconocerlo.',
+    'setup.nameLabel':    'Nombre de este dispositivo',
+    'setup.placeholder':  'Ej: PC Oficina, MacBook Ana…',
+    'setup.replyTo':      'Responder a: {name}',
+    'setup.start':        'Comenzar →',
+
+    'home.thisDevice':    'Este dispositivo',
+    'home.copyCode':      'Copiar código',
+    'home.editName':      'Editar nombre',
+    'home.linked':        'Dispositivos vinculados',
+    'home.empty':         'Aún no tienes dispositivos vinculados.<br>Pulsa el botón de abajo para añadir uno.',
+    'home.addDevice':     'Vincular nuevo dispositivo',
+    'home.received':      'Archivos recibidos',
+    'peer.online':        'En línea',
+    'peer.offline':       'Sin sesión',
+    'peer.tapToSend':     'Toca para enviar',
+    'peer.unlink':        'Desvincular',
+    'file.download':      '⬇ Descargar',
+
+    'link.title':         'Vincular dispositivo',
+    'link.sub':           'Comparte tu código con el otro dispositivo, o escribe aquí el suyo.',
+    'link.yourCode':      'Tu código',
+    'link.copyCode':      '📋 Copiar código',
+    'link.copyLink':      '🔗 Copiar enlace',
+    'link.or':            'o',
+    'link.otherCode':     'Código del otro dispositivo',
+    'link.pair':          'Vincular',
+    'link.hint':          'También puedes pegar el enlace completo. El otro dispositivo debe estar abierto para aceptar.',
+
+    'request.title':      '📨 Solicitud de vinculación',
+    'request.wants':      'quiere vincularse contigo.',
+    'request.code':       'Código del dispositivo',
+    'request.warning':    'Acepta solo si reconoces este código: el nombre lo elige cada dispositivo y puede repetirse.',
+    'request.accept':     '✓ Aceptar',
+    'request.reject':     'Rechazar',
+
+    'send.title':         'Enviar archivo',
+    'send.drop':          '<strong>Elige un archivo</strong><br>o arrástralo aquí',
+    'send.send':          'Enviar',
+    'common.cancel':      'Cancelar',
+    'common.close':       'Cerrar',
+    'transfer.sending':   'Enviando…',
+    'transfer.receiving': 'Recibiendo…',
+    'transfer.done':      'Completado',
+
+    'toast.peerOnline':   '🟢 {name} está en línea',
+    'toast.peerOffline':  '⚫ {name} se desconectó',
+    'toast.paired':       '✅ Vinculado con {name}',
+    'toast.rejected':     '❌ Solicitud rechazada',
+    'toast.sendError':    '⚠️ Error en la transferencia',
+    'toast.received':     '✅ Archivo recibido de {name}',
+    'toast.receiveError': '⚠️ Error al recibir el archivo',
+    'toast.unlinkAsk':    '¿Desvincular {name}?',
+    'toast.unlinked':     '🗑 {name} desvinculado',
+    'toast.connecting':   'Conectando con el servidor…',
+    'toast.ownCode':      'Ese es el código de este mismo dispositivo',
+    'toast.alreadyPaired':'Ya estás vinculado con {name}',
+    'toast.requestSent':  'Solicitud enviada a {name}… acéptala en el otro dispositivo',
+    'toast.copyFailed':   '⚠️ No se pudo copiar; selecciónalo y cópialo a mano',
+    'toast.nameRequired': 'Ingresa un nombre para este dispositivo',
+    'toast.renameAsk':    'Nuevo nombre para este dispositivo:',
+    'toast.codeCopied':   '📋 Código copiado',
+    'toast.linkCopied':   '🔗 Enlace copiado',
+    'toast.invalidCode':  '⚠️ Código no válido: debe tener el formato xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx',
+    'toast.reLink':       '🔐 Seguridad actualizada: vuelve a vincular tus dispositivos',
+    'device.default':     'Dispositivo',
+
+    // Server error codes
+    'err.DEVICE_OFFLINE':     'El dispositivo no está conectado',
+    'err.NOT_PAIRED':         'Los dispositivos no están vinculados',
+    'err.NO_PENDING_REQUEST': 'No hay solicitud pendiente de ese dispositivo',
+    'err.TOO_MANY_REQUESTS':  'El dispositivo tiene demasiadas solicitudes pendientes',
+    'err.RATE_LIMITED':       'Demasiados mensajes; espera un momento',
+    'err.CAPACITY':           'El servidor está lleno; inténtalo más tarde',
+    'err.INVALID_SECRET':     'Identidad de dispositivo inválida',
+    'err.INTERNAL':           'Error interno del servidor',
+  },
+  en: {
+    'conn.connecting':    'Connecting…',
+    'conn.online':        'Connected',
+    'conn.reconnecting':  'Reconnecting…',
+    'conn.replaced':      'Open in another tab',
+    'theme.title':        'Toggle light / dark theme',
+    'lang.title':         'Cambiar idioma a español',
+
+    'setup.title':        'Welcome to FileSwap',
+    'setup.sub':          'Direct file transfer between devices, with no servers in the middle. This device will get a <strong>unique code</strong> (UUID) for linking; the name is just to recognize it.',
+    'setup.nameLabel':    'Name of this device',
+    'setup.placeholder':  'e.g. Office PC, Ana’s MacBook…',
+    'setup.replyTo':      'Replying to: {name}',
+    'setup.start':        'Get started →',
+
+    'home.thisDevice':    'This device',
+    'home.copyCode':      'Copy code',
+    'home.editName':      'Edit name',
+    'home.linked':        'Linked devices',
+    'home.empty':         'You have no linked devices yet.<br>Use the button below to add one.',
+    'home.addDevice':     'Link a new device',
+    'home.received':      'Received files',
+    'peer.online':        'Online',
+    'peer.offline':       'Offline',
+    'peer.tapToSend':     'Tap to send',
+    'peer.unlink':        'Unlink',
+    'file.download':      '⬇ Download',
+
+    'link.title':         'Link a device',
+    'link.sub':           'Share your code with the other device, or type theirs here.',
+    'link.yourCode':      'Your code',
+    'link.copyCode':      '📋 Copy code',
+    'link.copyLink':      '🔗 Copy link',
+    'link.or':            'or',
+    'link.otherCode':     'Other device’s code',
+    'link.pair':          'Link',
+    'link.hint':          'You can also paste the full link. The other device must be open to accept.',
+
+    'request.title':      '📨 Link request',
+    'request.wants':      'wants to link with you.',
+    'request.code':       'Device code',
+    'request.warning':    'Only accept if you recognize this code: each device picks its own name, and names can repeat.',
+    'request.accept':     '✓ Accept',
+    'request.reject':     'Reject',
+
+    'send.title':         'Send file',
+    'send.drop':          '<strong>Choose a file</strong><br>or drag it here',
+    'send.send':          'Send',
+    'common.cancel':      'Cancel',
+    'common.close':       'Close',
+    'transfer.sending':   'Sending…',
+    'transfer.receiving': 'Receiving…',
+    'transfer.done':      'Done',
+
+    'toast.peerOnline':   '🟢 {name} is online',
+    'toast.peerOffline':  '⚫ {name} went offline',
+    'toast.paired':       '✅ Linked with {name}',
+    'toast.rejected':     '❌ Request rejected',
+    'toast.sendError':    '⚠️ Transfer error',
+    'toast.received':     '✅ File received from {name}',
+    'toast.receiveError': '⚠️ Error receiving the file',
+    'toast.unlinkAsk':    'Unlink {name}?',
+    'toast.unlinked':     '🗑 {name} unlinked',
+    'toast.connecting':   'Connecting to the server…',
+    'toast.ownCode':      'That’s this device’s own code',
+    'toast.alreadyPaired':'You’re already linked with {name}',
+    'toast.requestSent':  'Request sent to {name}… accept it on the other device',
+    'toast.copyFailed':   '⚠️ Couldn’t copy; select it and copy it manually',
+    'toast.nameRequired': 'Enter a name for this device',
+    'toast.renameAsk':    'New name for this device:',
+    'toast.codeCopied':   '📋 Code copied',
+    'toast.linkCopied':   '🔗 Link copied',
+    'toast.invalidCode':  '⚠️ Invalid code: it must look like xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx',
+    'toast.reLink':       '🔐 Security upgraded: please link your devices again',
+    'device.default':     'Device',
+
+    'err.DEVICE_OFFLINE':     'The device is not connected',
+    'err.NOT_PAIRED':         'The devices are not linked',
+    'err.NO_PENDING_REQUEST': 'There is no pending request from that device',
+    'err.TOO_MANY_REQUESTS':  'The device has too many pending requests',
+    'err.RATE_LIMITED':       'Too many messages; wait a moment',
+    'err.CAPACITY':           'The server is full; try again later',
+    'err.INVALID_SECRET':     'Invalid device identity',
+    'err.INTERNAL':           'Internal server error',
+  },
+};
+
+// Saved choice, else the first Spanish/English entry in the browser's languages, else English
+function detectLang() {
+  try {
+    const saved = localStorage.getItem(LANG_KEY);
+    if (saved in I18N) return saved;
+  } catch {}
+  for (const l of navigator.languages?.length ? navigator.languages : [navigator.language || '']) {
+    const base = String(l).toLowerCase().split('-')[0];
+    if (base in I18N) return base;
+  }
+  return 'en';
+}
+
+let lang = detectLang();
+
+function t(key, vars = {}) {
+  const s = I18N[lang][key] ?? I18N.es[key] ?? key;
+  return s.replace(/\{(\w+)\}/g, (_, k) => vars[k] ?? '');
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  STATE
+// ═══════════════════════════════════════════════════════════════
+let state = {
+  deviceSecret: null, // 256-bit hex, never leaves this device except to the server on register
+  deviceId:   null,   // public, derived by the server from deviceSecret
+  deviceName: null,
+  pairs:      [],   // [{id, name}]
+  peers:      {},   // deviceId → {name, online: bool}
+};
+
+let ws        = null;
+let wsReady   = false;
+let connState = 'connecting'; // connecting | online | reconnecting | replaced
+let peerConns = {}; // deviceId → RTCPeerConnection
+let pendingPairRequest = null; // {id, name}
+let sendTarget = null; // deviceId of current send target
+let selectedFile = null;
+let receivedFiles = []; // [{name, size, blob, url}]
+let migratedIdentity = false; // true if old pairs were dropped by the identity upgrade
+
+// ═══════════════════════════════════════════════════════════════
+//  PERSISTENCE (localStorage)
+// ═══════════════════════════════════════════════════════════════
+function loadState() {
+  try {
+    let raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) {
+      // Carry the identity and pairs over from the DropLink-era key
+      raw = localStorage.getItem(LEGACY_STORAGE_KEY);
+      if (!raw) return;
+      localStorage.setItem(STORAGE_KEY, raw);
+      localStorage.removeItem(LEGACY_STORAGE_KEY);
+    }
+    const saved = JSON.parse(raw);
+    state.deviceName = saved.deviceName || null;
+    if (saved.deviceSecret) {
+      state.deviceSecret = saved.deviceSecret;
+      state.deviceId     = saved.deviceId || null;
+      state.pairs        = saved.pairs    || [];
+    } else if (saved.deviceId) {
+      // Pre-secret version: the old deviceId can't be proven, so start a new
+      // identity. Old pairs point to IDs the other side no longer uses either.
+      state.deviceSecret = genSecret();
+      migratedIdentity   = (saved.pairs || []).length > 0;
+      saveState();
+    }
+  } catch {}
+}
+
+function saveState() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      deviceSecret: state.deviceSecret,
+      deviceId:   state.deviceId,
+      deviceName: state.deviceName,
+      pairs:      state.pairs,
+    }));
+  } catch {}
+}
+
+// crypto.getRandomValues works on plain HTTP too (LAN testing), unlike crypto.subtle
+function genSecret() {
+  const bytes = crypto.getRandomValues(new Uint8Array(32));
+  return Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
+}
+
+function registerMsg() {
+  return {
+    type:      'register',
+    secret:    state.deviceSecret,
+    name:      state.deviceName,
+    pairedIds: state.pairs.map(p => p.id),
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  WEBSOCKET
+// ═══════════════════════════════════════════════════════════════
+function connectWS() {
+  ws = new WebSocket(WS_URL);
+  ws.onopen = () => {
+    wsReady = true;
+    updateConnBadge(true);
+    // Register with server
+    wsSend(registerMsg());
+  };
+
+  ws.onclose = (ev) => {
+    wsReady = false;
+    updateConnBadge(false);
+    // Mark all peers offline
+    for (const id of Object.keys(state.peers)) {
+      state.peers[id].online = false;
+    }
+    renderPeers();
+    // Another tab of this browser took over the session — don't fight it
+    if (ev.code === 4001) {
+      connState = 'replaced';
+      document.getElementById('conn-label').textContent = t('conn.replaced');
+      return;
+    }
+    // Reconnect after 3 s
+    setTimeout(connectWS, 3000);
+  };
+
+  ws.onerror = () => {};
+
+  ws.onmessage = (ev) => {
+    let msg;
+    try { msg = JSON.parse(ev.data); } catch { return; }
+    handleServerMsg(msg);
+  };
+}
+
+function wsSend(data) {
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify(data));
+  }
+}
+
+function handleServerMsg(msg) {
+  switch (msg.type) {
+
+    case 'registered':
+      state.deviceId = msg.deviceId;
+      saveState();
+      updateMyCard();
+      break;
+
+    case 'presence': {
+      const { deviceId, name, online } = msg;
+      if (!state.peers[deviceId]) state.peers[deviceId] = { name, online: false };
+      state.peers[deviceId].name   = name;
+      state.peers[deviceId].online = online;
+      renderPeers();
+      toast(t(online ? 'toast.peerOnline' : 'toast.peerOffline', { name }));
+      break;
+    }
+
+    case 'pair-request': {
+      const { from } = msg;
+      pendingPairRequest = from;
+      document.getElementById('requester-name').textContent = from.name;
+      document.getElementById('requester-id').textContent   = from.id;
+      openModal('pair-request-modal');
+      break;
+    }
+
+    case 'pair-accepted': {
+      const { from } = msg;
+      addPair(from.id, from.name);
+      state.peers[from.id] = { name: from.name, online: true };
+      renderPeers();
+      closeModal('qr-modal');
+      toast(t('toast.paired', { name: from.name }));
+      break;
+    }
+
+    case 'pair-rejected':
+      toast(t('toast.rejected'));
+      break;
+
+    case 'unpaired': {
+      removePair(msg.by);
+      renderPeers();
+      break;
+    }
+
+    case 'signal':
+      handleSignal(msg.from, msg.data);
+      break;
+
+    case 'error':
+      // Translate known server error codes; fall back to the server's text
+      toast(`⚠️ ${I18N[lang]['err.' + msg.code] ? t('err.' + msg.code) : (msg.message ?? msg.code)}`);
+      break;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  PAIRS
+// ═══════════════════════════════════════════════════════════════
+function addPair(id, name) {
+  if (!state.pairs.find(p => p.id === id)) {
+    state.pairs.push({ id, name });
+    saveState();
+  }
+}
+function removePair(id) {
+  state.pairs = state.pairs.filter(p => p.id !== id);
+  delete state.peers[id];
+  saveState();
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  WEBRTC — SIGNAL HANDLING
+// ═══════════════════════════════════════════════════════════════
+async function handleSignal(fromId, data) {
+  // Defense in depth: the server already checks this
+  if (!state.pairs.find(p => p.id === fromId) || !data) return;
+  if (data.type === 'offer') {
+    // We are the receiver
+    const pc = getOrCreatePC(fromId, false);
+    await pc.setRemoteDescription(new RTCSessionDescription(data));
+    const answer = await pc.createAnswer();
+    await pc.setLocalDescription(answer);
+    wsSend({ type: 'signal', to: fromId, data: { type: 'answer', sdp: answer.sdp } });
+  } else if (data.type === 'answer') {
+    const pc = peerConns[fromId];
+    if (pc) await pc.setRemoteDescription(new RTCSessionDescription(data));
+  } else if (data.type === 'candidate') {
+    const pc = peerConns[fromId];
+    if (pc && data.candidate) {
+      try { await pc.addIceCandidate(new RTCIceCandidate(data.candidate)); } catch {}
+    }
+  }
+}
+
+function getOrCreatePC(peerId, isSender) {
+  if (peerConns[peerId]) return peerConns[peerId];
+
+  const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+  peerConns[peerId] = pc;
+
+  pc.onicecandidate = (ev) => {
+    if (ev.candidate) {
+      wsSend({ type: 'signal', to: peerId, data: { type: 'candidate', candidate: ev.candidate.toJSON() } });
+    }
+  };
+
+  pc.onconnectionstatechange = () => {
+    if (['failed', 'closed', 'disconnected'].includes(pc.connectionState)) {
+      pc.close();
+      delete peerConns[peerId];
+    }
+  };
+
+  if (!isSender) {
+    pc.ondatachannel = (ev) => {
+      setupReceiveChannel(ev.channel, peerId);
+    };
+  }
+
+  return pc;
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  FILE SEND
+// ═══════════════════════════════════════════════════════════════
+async function sendFile(targetId, file) {
+  const pc = getOrCreatePC(targetId, true);
+  const dc = pc.createDataChannel('fileswap-file', { ordered: true });
+
+  openTransferModal('transfer.sending', file.name);
+
+  dc.bufferedAmountLowThreshold = 64 * 1024;
+
+  dc.onopen = () => {
+    // Send metadata first
+    const meta = JSON.stringify({ name: file.name, size: file.size, type: file.type || 'application/octet-stream' });
+    dc.send(meta);
+    // Stream chunks
+    streamFile(dc, file);
+  };
+  dc.onerror = (e) => { toast(t('toast.sendError')); closeModal('transfer-modal'); };
+
+  const offer = await pc.createOffer();
+  await pc.setLocalDescription(offer);
+  wsSend({ type: 'signal', to: targetId, data: { type: 'offer', sdp: offer.sdp } });
+}
+
+function streamFile(dc, file) {
+  let offset = 0;
+  const total = file.size;
+
+  function sendNext() {
+    if (offset >= total) {
+      // Signal end
+      dc.send(JSON.stringify({ __end: true }));
+      updateProgress(100, t('transfer.done'));
+      setTimeout(() => closeModal('transfer-modal'), 1200);
+      return;
+    }
+
+    // Backpressure
+    if (dc.bufferedAmount > 256 * 1024) {
+      dc.onbufferedamountlow = () => { dc.onbufferedamountlow = null; sendNext(); };
+      return;
+    }
+
+    const slice = file.slice(offset, offset + CHUNK_SIZE);
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      if (dc.readyState !== 'open') return;
+      dc.send(e.target.result);
+      offset += e.target.result.byteLength;
+      const pct = Math.round((offset / total) * 100);
+      updateProgress(pct, `${pct}% — ${fmtBytes(offset)} / ${fmtBytes(total)}`);
+      sendNext();
+    };
+    reader.readAsArrayBuffer(slice);
+  }
+  sendNext();
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  FILE RECEIVE
+// ═══════════════════════════════════════════════════════════════
+function setupReceiveChannel(dc, fromId) {
+  let meta = null;
+  let buffers = [];
+  let received = 0;
+  const fromName = state.peers[fromId]?.name ?? fromId;
+
+  dc.binaryType = 'arraybuffer';
+
+  dc.onmessage = (ev) => {
+    if (typeof ev.data === 'string') {
+      const parsed = JSON.parse(ev.data);
+      if (parsed.__end) {
+        // Assemble file
+        const blob = new Blob(buffers, { type: meta.type });
+        const url  = URL.createObjectURL(blob);
+        closeModal('transfer-modal');
+        addReceivedFile({ name: meta.name, size: meta.size, blob, url });
+        toast(t('toast.received', { name: fromName }));
+        return;
+      }
+      // Metadata frame
+      meta = parsed;
+      openTransferModal('transfer.receiving', meta.name);
+    } else {
+      // Binary chunk
+      buffers.push(ev.data);
+      received += ev.data.byteLength;
+      if (meta) {
+        const pct = Math.round((received / meta.size) * 100);
+        updateProgress(pct, `${pct}% — ${fmtBytes(received)} / ${fmtBytes(meta.size)}`);
+      }
+    }
+  };
+  dc.onerror = () => toast(t('toast.receiveError'));
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  UI HELPERS
+// ═══════════════════════════════════════════════════════════════
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+function openModal(id)  { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+function toast(msg, duration = 3000) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.classList.remove('show'), duration);
+}
+
+function updateConnBadge(online) {
+  document.getElementById('conn-dot').classList.toggle('online', online);
+  connState = online ? 'online' : 'reconnecting';
+  document.getElementById('conn-label').textContent = t(`conn.${connState}`);
+}
+
+function updateMyCard() {
+  document.getElementById('my-name').textContent = state.deviceName;
+  document.getElementById('my-id').textContent   = state.deviceId || t('conn.connecting');
+  document.getElementById('my-avatar').textContent = deviceEmoji(state.deviceName);
+}
+
+function deviceEmoji(name) {
+  if (!name) return '📱';
+  const n = name.toLowerCase();
+  if (n.includes('mac') || n.includes('pc') || n.includes('laptop') || n.includes('compu')) return '💻';
+  if (n.includes('ipad') || n.includes('tablet')) return '📟';
+  if (n.includes('tv')) return '📺';
+  return '📱';
+}
+
+function renderPeers() {
+  const list = document.getElementById('peers-list');
+  if (state.pairs.length === 0) {
+    list.innerHTML = `<div class="empty-state"><div class="icon">📎</div><div>${t('home.empty')}</div></div>`;
+    return;
+  }
+
+  list.innerHTML = '';
+  for (const pair of state.pairs) {
+    const peer   = state.peers[pair.id] || { name: pair.name, online: false };
+    const online = peer.online;
+    const card   = document.createElement('div');
+    card.className = `peer-card ${online ? 'online' : ''}`;
+    card.innerHTML = `
+      <div class="peer-avatar">
+        ${deviceEmoji(pair.name)}
+        <div class="peer-status ${online ? 'online' : ''}"></div>
+      </div>
+      <div class="peer-info">
+        <div class="peer-name" title="${escHtml(pair.name)}">${escHtml(pair.name)}</div>
+        <div class="peer-meta">
+          <span class="peer-label ${online ? 'online' : ''}">${t(online ? 'peer.online' : 'peer.offline')}</span>
+          ${online ? `<span class="peer-hint">${t('peer.tapToSend')}</span>` : ''}
+          <span class="peer-id" title="${escHtml(pair.id)}">#${escHtml(pair.id.slice(0, 8))}</span>
+        </div>
+      </div>
+      <div class="peer-actions">
+        <button class="btn btn-ghost btn-sm unlink-btn" data-id="${pair.id}" title="${t('peer.unlink')}" aria-label="${t('peer.unlink')}">🗑</button>
+      </div>
+    `;
+    if (online) {
+      card.addEventListener('click', (e) => {
+        if (e.target.closest('.unlink-btn')) return;
+        openSendModal(pair.id, pair.name);
+      });
+    }
+    card.querySelector('.unlink-btn').addEventListener('click', (e) => {
+      e.stopPropagation();
+      unlinkDevice(pair.id, pair.name);
+    });
+    list.appendChild(card);
+  }
+}
+
+function unlinkDevice(id, name) {
+  if (!confirm(t('toast.unlinkAsk', { name }))) return;
+  wsSend({ type: 'unpair', with: id });
+  removePair(id);
+  renderPeers();
+  toast(t('toast.unlinked', { name }));
+}
+
+function addReceivedFile({ name, size, blob, url }) {
+  receivedFiles.unshift({ name, size, blob, url });
+  renderReceived();
+}
+
+function renderReceived() {
+  const section = document.getElementById('received-section');
+  const list    = document.getElementById('received-list');
+  section.style.display = receivedFiles.length ? '' : 'none';
+  list.innerHTML = '';
+  for (const { name, size, url } of receivedFiles) {
+    const card = document.createElement('div');
+    card.className = 'received-card';
+    card.innerHTML = `
+      <div class="file-icon">${fileEmoji(name)}</div>
+      <div class="file-info">
+        <div class="file-name">${escHtml(name)}</div>
+        <div class="file-meta">${fmtBytes(size)}</div>
+      </div>
+      <a href="${url}" download="${escHtml(name)}">${t('file.download')}</a>
+    `;
+    list.appendChild(card);
+  }
+}
+
+function fileEmoji(name) {
+  if (!name) return '📄';
+  const ext = name.split('.').pop().toLowerCase();
+  const map = { pdf:'📕', jpg:'🖼', jpeg:'🖼', png:'🖼', gif:'🖼', mp4:'🎬', mov:'🎬',
+    mp3:'🎵', zip:'🗜', rar:'🗜', doc:'📝', docx:'📝', xls:'📊', xlsx:'📊',
+    ppt:'📊', pptx:'📊', txt:'📝', csv:'📊', json:'🧾', js:'🧾', html:'🌐' };
+  return map[ext] || '📄';
+}
+
+function fmtBytes(n) {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024**2) return `${(n/1024).toFixed(1)} KB`;
+  if (n < 1024**3) return `${(n/1024**2).toFixed(1)} MB`;
+  return `${(n/1024**3).toFixed(1)} GB`;
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ─── QR Modal ─────────────────────────────────────────────────────────────
+let qrInstance = null;
+function showQRModal() {
+  if (!state.deviceId) { toast(t('toast.connecting')); return; }
+  const pairUrl = `${location.origin}/?pair=${state.deviceId}&pname=${encodeURIComponent(state.deviceName)}`;
+  document.getElementById('qr-url-text').textContent = pairUrl;
+  document.getElementById('my-code').textContent     = state.deviceId;
+  document.getElementById('pair-code-input').value   = '';
+
+  const container = document.getElementById('qr-container');
+  container.innerHTML = '';
+  qrInstance = new QRCode(container, {
+    text: pairUrl, width: 188, height: 188,
+    colorDark: '#000000', colorLight: '#ffffff',
+    correctLevel: QRCode.CorrectLevel.M,
+  });
+  openModal('qr-modal');
+}
+
+// ─── Send Modal ───────────────────────────────────────────────────────────
+function openSendModal(targetId, targetName) {
+  sendTarget   = targetId;
+  selectedFile = null;
+  document.getElementById('send-target-name').textContent = targetName;
+  document.getElementById('selected-file').classList.remove('visible');
+  document.getElementById('send-btn').disabled = true;
+  document.getElementById('file-input').value  = '';
+  openModal('send-modal');
+}
+
+// ─── Transfer Modal ───────────────────────────────────────────────────────
+let transferTitleKey = 'transfer.sending';
+function openTransferModal(titleKey, filename) {
+  transferTitleKey = titleKey;
+  document.getElementById('transfer-title').textContent    = t(titleKey);
+  document.getElementById('transfer-filename').textContent = filename;
+  updateProgress(0, '0%');
+  openModal('transfer-modal');
+}
+
+function updateProgress(pct, label) {
+  document.getElementById('progress-fill').style.width  = `${pct}%`;
+  document.getElementById('progress-label').textContent = label;
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  INIT — check for ?pair= in URL
+// ═══════════════════════════════════════════════════════════════
+function checkPairParam() {
+  const params = new URLSearchParams(location.search);
+  const pairId   = params.get('pair');
+  const pairName = params.get('pname') || t('device.default');
+  if (!pairId) return;
+
+  // Clean URL without reload
+  history.replaceState({}, '', location.pathname);
+
+  const match = pairId.match(UUID_RE);
+  if (match) requestPair(match[0].toLowerCase(), pairName);
+}
+
+// Send a pair-request to a device by its UUID (from QR link or typed in).
+// Returns false if the request was not sent.
+function requestPair(targetId, label = targetId.slice(0, 8)) {
+  if (targetId === state.deviceId) { toast(t('toast.ownCode')); return false; }
+  const existing = state.pairs.find(p => p.id === targetId);
+  if (existing) { toast(t('toast.alreadyPaired', { name: existing.name })); return false; }
+
+  // Wait until the server has registered us
+  function trySend() {
+    if (!wsReady || !state.deviceId) { setTimeout(trySend, 300); return; }
+    wsSend({ type: 'pair-request', to: targetId });
+    toast(t('toast.requestSent', { name: label }));
+  }
+  trySend();
+  return true;
+}
+
+// Clipboard API only exists on HTTPS/localhost; fall back to execCommand
+// so copying also works over plain HTTP on the LAN.
+function copyText(text, okMsg) {
+  const fallback = () => {
+    const ta = document.createElement('textarea');
+    ta.value = text; ta.setAttribute('readonly', '');
+    ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    let ok = false;
+    try { ok = document.execCommand('copy'); } catch {}
+    ta.remove();
+    toast(ok ? okMsg : t('toast.copyFailed'));
+  };
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(text).then(() => toast(okMsg), fallback);
+  } else {
+    fallback();
+  }
+}
+
+// ─── Language ─────────────────────────────────────────────────────────────
+function applyLang(next) {
+  lang = next;
+  document.documentElement.lang = lang;
+  for (const el of document.querySelectorAll('[data-i18n]'))             el.textContent = t(el.dataset.i18n);
+  for (const el of document.querySelectorAll('[data-i18n-html]'))        el.innerHTML   = t(el.dataset.i18nHtml);
+  for (const el of document.querySelectorAll('[data-i18n-placeholder]')) el.placeholder = t(el.dataset.i18nPlaceholder);
+  for (const el of document.querySelectorAll('[data-i18n-tab]'))         el.dataset.tab = t(el.dataset.i18nTab);
+  for (const el of document.querySelectorAll('[data-i18n-title]')) {
+    el.title = t(el.dataset.i18nTitle);
+    if (el.hasAttribute('aria-label')) el.setAttribute('aria-label', el.title);
+  }
+  document.getElementById('lang-toggle').textContent = lang.toUpperCase();
+  // Re-render everything built from JS
+  document.getElementById('conn-label').textContent     = t(`conn.${connState}`);
+  document.getElementById('transfer-title').textContent = t(transferTitleKey);
+  if (state.deviceName) { updateMyCard(); renderPeers(); renderReceived(); }
+}
+
+// ─── Theme ────────────────────────────────────────────────────────────────
+function applyTheme(theme) {
+  document.documentElement.dataset.theme = theme;
+  document.getElementById('theme-toggle').textContent = theme === 'dark' ? '☀' : '☾';
+  document.querySelector('meta[name="theme-color"]').content = theme === 'dark' ? '#1c1812' : '#eee7d3';
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  EVENT LISTENERS
+// ═══════════════════════════════════════════════════════════════
+document.getElementById('setup-btn').addEventListener('click', () => {
+  const name = document.getElementById('setup-name').value.trim();
+  if (!name) { toast(t('toast.nameRequired')); return; }
+  state.deviceName   = name;
+  state.deviceSecret = state.deviceSecret || genSecret();
+  saveState();
+  bootApp();
+});
+
+document.getElementById('setup-name').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') document.getElementById('setup-btn').click();
+});
+
+document.getElementById('edit-name-btn').addEventListener('click', () => {
+  const name = prompt(t('toast.renameAsk'), state.deviceName);
+  if (name && name.trim()) {
+    state.deviceName = name.trim();
+    saveState();
+    updateMyCard();
+    if (wsReady) wsSend(registerMsg());
+  }
+});
+
+document.getElementById('add-device-btn').addEventListener('click', showQRModal);
+
+document.getElementById('qr-close-btn').addEventListener('click', () => closeModal('qr-modal'));
+document.getElementById('copy-link-btn').addEventListener('click', () => {
+  copyText(document.getElementById('qr-url-text').textContent, t('toast.linkCopied'));
+});
+document.getElementById('copy-code-btn').addEventListener('click', () => {
+  copyText(state.deviceId, t('toast.codeCopied'));
+});
+for (const id of ['my-id', 'copy-my-id-btn']) {
+  document.getElementById(id).addEventListener('click', () => {
+    if (state.deviceId) copyText(state.deviceId, t('toast.codeCopied'));
+  });
+}
+
+// Manual pairing: accepts a bare UUID or a full pair link
+const pairCodeInput = document.getElementById('pair-code-input');
+document.getElementById('pair-code-btn').addEventListener('click', () => {
+  const match = pairCodeInput.value.trim().match(UUID_RE);
+  if (!match) { toast(t('toast.invalidCode')); return; }
+  if (requestPair(match[0].toLowerCase())) pairCodeInput.value = '';
+});
+pairCodeInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') document.getElementById('pair-code-btn').click();
+});
+
+// Language toggle (an explicit choice overrides the browser language)
+document.getElementById('lang-toggle').addEventListener('click', () => {
+  const next = lang === 'es' ? 'en' : 'es';
+  try { localStorage.setItem(LANG_KEY, next); } catch {}
+  applyLang(next);
+});
+
+// Theme toggle (an explicit choice overrides the OS preference)
+document.getElementById('theme-toggle').addEventListener('click', () => {
+  const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+  try { localStorage.setItem(THEME_KEY, next); } catch {}
+  applyTheme(next);
+});
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+  let saved = null;
+  try { saved = localStorage.getItem(THEME_KEY); } catch {}
+  if (!saved) applyTheme(e.matches ? 'dark' : 'light');
+});
+
+// Pair request response
+document.getElementById('pair-accept-btn').addEventListener('click', () => {
+  if (!pendingPairRequest) return;
+  wsSend({ type: 'pair-accept', to: pendingPairRequest.id });
+  addPair(pendingPairRequest.id, pendingPairRequest.name);
+  state.peers[pendingPairRequest.id] = { name: pendingPairRequest.name, online: true };
+  renderPeers();
+  closeModal('pair-request-modal');
+  toast(t('toast.paired', { name: pendingPairRequest.name }));
+  pendingPairRequest = null;
+});
+
+document.getElementById('pair-reject-btn').addEventListener('click', () => {
+  if (pendingPairRequest) {
+    wsSend({ type: 'pair-reject', to: pendingPairRequest.id });
+    pendingPairRequest = null;
+  }
+  closeModal('pair-request-modal');
+});
+
+// File selection
+const dropZone  = document.getElementById('drop-zone');
+const fileInput = document.getElementById('file-input');
+
+dropZone.addEventListener('click', () => fileInput.click());
+fileInput.addEventListener('change', () => {
+  if (fileInput.files[0]) setSelectedFile(fileInput.files[0]);
+});
+
+dropZone.addEventListener('dragover',  (e) => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+dropZone.addEventListener('dragleave', ()  => dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop', (e) => {
+  e.preventDefault(); dropZone.classList.remove('drag-over');
+  if (e.dataTransfer.files[0]) setSelectedFile(e.dataTransfer.files[0]);
+});
+
+function setSelectedFile(file) {
+  selectedFile = file;
+  document.getElementById('selected-icon').textContent = fileEmoji(file.name);
+  document.getElementById('selected-name').textContent = file.name;
+  document.getElementById('selected-size').textContent = fmtBytes(file.size);
+  document.getElementById('selected-file').classList.add('visible');
+  document.getElementById('send-btn').disabled = false;
+}
+
+document.getElementById('clear-file-btn').addEventListener('click', () => {
+  selectedFile = null;
+  fileInput.value = '';
+  document.getElementById('selected-file').classList.remove('visible');
+  document.getElementById('send-btn').disabled = true;
+});
+
+document.getElementById('send-btn').addEventListener('click', () => {
+  if (!selectedFile || !sendTarget) return;
+  closeModal('send-modal');
+  sendFile(sendTarget, selectedFile);
+});
+
+document.getElementById('send-cancel-btn').addEventListener('click', () => closeModal('send-modal'));
+document.getElementById('transfer-cancel-btn').addEventListener('click', () => {
+  closeModal('transfer-modal');
+  if (sendTarget && peerConns[sendTarget]) {
+    peerConns[sendTarget].close();
+    delete peerConns[sendTarget];
+  }
+});
+
+// Close modal on overlay click
+document.querySelectorAll('.modal-overlay').forEach(overlay => {
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay && overlay.id !== 'transfer-modal') {
+      overlay.classList.remove('open');
+    }
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════
+//  BOOT
+// ═══════════════════════════════════════════════════════════════
+function bootApp() {
+  updateMyCard();
+  renderPeers();
+  showScreen('screen-home');
+  connectWS();
+  checkPairParam();
+  if (migratedIdentity) toast(t('toast.reLink'), 6000);
+}
+
+// Start
+applyTheme(document.documentElement.dataset.theme);
+applyLang(lang);
+loadState();
+if (state.deviceName) {
+  bootApp();
+} else {
+  showScreen('screen-setup');
+  // Pre-fill if URL has pname (came from a pair link before setup)
+  const pname = new URLSearchParams(location.search).get('pname');
+  if (pname) {
+    const input = document.getElementById('setup-name');
+    delete input.dataset.i18nPlaceholder; // keep the reply hint across language switches
+    input.placeholder = t('setup.replyTo', { name: pname });
+  }
+}
+</script>
+</body>
+</html>

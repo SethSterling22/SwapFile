@@ -1,11 +1,11 @@
 services:
-  droplink:
+  fileswap:
     build:
       context: .
       dockerfile: server/Dockerfile
     ports:
-      # Host port (override with DROPLINK_PORT=xxxx); the container always listens on 3000
-      - "${DROPLINK_PORT:-7341}:3000"
+      # Host port (override with FILESWAP_PORT=xxxx); the container always listens on 3000
+      - "${FILESWAP_PORT:-7341}:3000"
     environment:
       PORT: 3000
       SESSION_TTL_MS: 1800000

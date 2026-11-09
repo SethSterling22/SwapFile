@@ -1,21 +1,26 @@
-# DropLink
+# FileSwap
 
 > Peer-to-peer anonymous file transfer between devices — no accounts, no cloud storage, no file content ever touches the server.
 
-DropLink connects two browser sessions directly using WebRTC DataChannels. The server's only job is to broker the initial handshake (WebRTC signaling). Once the connection is established, the server is out of the picture entirely.
+FileSwap connects two browser sessions directly using WebRTC DataChannels. The server's only job is to broker the initial handshake (WebRTC signaling). Once the connection is established, the server is out of the picture entirely.
 
 ---
 
 ## How It Works
 
-1. **Device A** opens the app, enters a device name, and clicks **"Link new device"** — a QR code appears.
-2. **Device B** scans the QR (or opens the shared link) from any browser.
-3. Device A sees a pairing request and accepts it. Both devices are now linked.
-4. The pairing is saved to `localStorage` — next time both devices come online, they recognize each other automatically.
-5. When a paired device shows a **green indicator** (live session), click it to send a file.
-6. The file travels directly from browser to browser. The receiver gets a download button.
+1. **Device A** opens the app and enters a device name. It gets a unique **device code** (a UUID) — the name is only a label and can repeat; the code is what identifies the device.
+2. On **"Vincular nuevo dispositivo"**, Device A shows its code as a QR, as text, and as a shareable link.
+3. **Device B** pairs by any of these:
+   - scanning the QR or opening the link, or
+   - typing (or pasting) Device A's code into **"Código del otro dispositivo"** — handy for two computers.
+4. Device A sees a pairing request with B's name **and code**, and accepts it. Both devices are now linked.
+5. The pairing is saved to `localStorage` — next time both devices come online, they recognize each other automatically.
+6. When a paired device shows a **green indicator** (live session), click it to send a file.
+7. The file travels directly from browser to browser. The receiver gets a download button.
 
 If a paired device is offline (grey indicator), sending is blocked — there is nowhere for the file to go.
+
+The interface is available in **Spanish and English**. It follows the browser's language (any `es-*` → Spanish, otherwise English) until the user picks one with the **ES/EN** button in the header; the choice is saved per browser. Light/dark mode works the same way with the ☾/☀ button.
 
 ---
 
@@ -23,7 +28,7 @@ If a paired device is offline (grey indicator), sending is blocked — there is 
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                        DropLink Server                          │
+│                        FileSwap Server                          │
 │                                                                 │
 │  HTTP  ──▶  Serves client/index.html (SPA)                      │
 │  WS    ──▶  Signaling relay (SDP / ICE only, max 16 KB/msg)     │
@@ -89,7 +94,7 @@ Sender                    Server                  Receiver
 ## Project Structure
 
 ```
-droplink/
+fileswap/
 ├── client/
 │   └── index.html          # Full SPA — HTML, CSS, and JS in a single file
 │                           # No build step, no framework dependencies
@@ -131,7 +136,7 @@ droplink/
 **Requirements:** Node.js 18+
 
 ```bash
-cd droplink/server
+cd fileswap/server
 npm install
 npm start
 ```
@@ -147,7 +152,7 @@ Find your local IP:
 ### Tests
 
 ```bash
-cd droplink/server
+cd fileswap/server
 npm test
 ```
 
@@ -162,15 +167,15 @@ The server is stateless — everything lives in memory. Any Node.js host works.
 ### Docker
 
 ```bash
-# Using docker compose (from droplink/) — serves on http://localhost:7341
+# Using docker compose (from fileswap/) — serves on http://localhost:7341
 docker compose up --build -d
 
 # Use another host port
-DROPLINK_PORT=8080 docker compose up --build -d
+FILESWAP_PORT=8080 docker compose up --build -d
 
 # Or directly
-docker build -f server/Dockerfile -t droplink .
-docker run -p 7341:3000 droplink
+docker build -f server/Dockerfile -t fileswap .
+docker run -p 7341:3000 fileswap
 ```
 
 ### Railway

@@ -1,5 +1,5 @@
 /**
- * DropLink — Signaling Server
+ * FileSwap — Signaling Server
  *
  * Responsibilities:
  *  1. Serve the client static files (client/)
@@ -367,7 +367,7 @@ function cleanup(id) {
 
 // ─── Start ─────────────────────────────────────────────────────────────────
 server.listen(PORT, () => {
-  console.log(`\n✅  DropLink server listening on http://localhost:${PORT}`);
+  console.log(`\n✅  FileSwap server listening on http://localhost:${PORT}`);
   console.log(`   WebSocket endpoint: ws://localhost:${PORT}/ws`);
   console.log(`   Health check:       http://localhost:${PORT}/health\n`);
 });
