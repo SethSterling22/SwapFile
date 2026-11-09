@@ -17,14 +17,14 @@ jobs:
         node: [20, 22]
     defaults:
       run:
-        working-directory: droplink/server
+        working-directory: fileswap/server
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node }}
           cache: npm
-          cache-dependency-path: droplink/server/package-lock.json
+          cache-dependency-path: fileswap/server/package-lock.json
       - run: npm ci
       - run: npm test
 
@@ -34,13 +34,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Build image
-        run: docker build -f droplink/server/Dockerfile -t droplink droplink
+        run: docker build -f fileswap/server/Dockerfile -t fileswap fileswap
       - name: Start container and check /health
         run: |
-          docker run -d --name droplink -p 3000:3000 droplink
+          docker run -d --name fileswap -p 3000:3000 fileswap
           for i in $(seq 1 20); do
             curl -fsS http://localhost:3000/health && exit 0
             sleep 1
           done
-          docker logs droplink
+          docker logs fileswap
           exit 1
