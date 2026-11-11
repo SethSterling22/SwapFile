@@ -201,6 +201,23 @@ fly deploy
 
 ---
 
+## About, Terms and Privacy
+
+The footer links to **Terms of use**, **Privacy** and **About**, each opening in a modal (also reachable directly at `/#terms`, `/#privacy`, `/#about`).
+
+Edit the `ABOUT` object near the top of the script in `fileswap/client/index.html` with your own details:
+
+| Field | Used for |
+|---|---|
+| `name`, `role`, `bio` | About section (`role`/`bio` have `es` and `en` versions) |
+| `email`, `website` | Links in About, and the contact shown in Terms/Privacy (falls back to `source`) |
+| `source` | "Source code" link |
+| `paypal` | Your PayPal.me link — the donation box and its QR code are generated from it. Leave empty to hide the box |
+
+The legal texts live in the `LEGAL` object in the same file and describe what the code actually does (P2P transfer, in-memory signaling, Google STUN, cdnjs). If you change that behavior, update them and `LEGAL_UPDATED`. They are a starting point, not legal advice.
+
+---
+
 ## Environment Variables
 
 Copy `server/.env.example` → `server/.env`.
@@ -246,4 +263,4 @@ Copy `server/.env.example` → `server/.env`.
 
 ## License
 
-MIT
+[GPL-3.0](LICENSE)

@@ -506,6 +506,68 @@
     #transfer-modal .transfer-info { font-size: .9rem; color: var(--muted); text-align: center; }
     #transfer-modal .transfer-filename { font-weight: 700; color: var(--ink); }
 
+    /* ───────────────────────────── Footer ──────────────────────────────────── */
+    .app-footer {
+      display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 6px 14px;
+      margin: 8px 20px 0; padding: 16px 0 calc(16px + env(safe-area-inset-bottom, 0px));
+      border-top: 1.5px dashed var(--border);
+      font-size: .76rem; color: var(--muted);
+    }
+    .app-footer a { color: var(--muted); font-weight: 600; text-decoration: none; }
+    .app-footer a:hover { color: var(--kraft); text-decoration: underline; text-underline-offset: 3px; }
+
+    /* ───────────────────────────── Info modal (legal / about) ──────────────── */
+    .info-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+    .icon-close {
+      flex-shrink: 0; width: 32px; height: 32px;
+      background: var(--paper-2); color: var(--ink);
+      border: 1px solid var(--border); border-radius: var(--radius-sm);
+      font-size: .95rem; cursor: pointer;
+    }
+    .icon-close:hover { border-color: var(--kraft); }
+    @media (min-width: 540px) { #info-modal .modal { max-width: 580px; } }
+
+    /* legal text = typed document */
+    .doc { font-size: .87rem; line-height: 1.6; color: var(--ink); }
+    .doc .updated { font-family: var(--font-mono); font-size: .72rem; color: var(--muted); margin-bottom: 10px; }
+    .doc .summary {
+      background: var(--paper-2); border-left: 4px solid var(--manila-2);
+      padding: 10px 12px; margin-bottom: 6px; border-radius: 2px;
+    }
+    .doc h3 { font-family: var(--font-title); font-size: 1rem; margin: 16px 0 4px; }
+    .doc p + p { margin-top: 6px; }
+    .doc ul { padding-left: 20px; margin-top: 4px; }
+    .doc li + li { margin-top: 3px; }
+    .doc a { color: var(--blue-ink); }
+
+    /* about */
+    .about-person { display: flex; gap: 14px; align-items: center; }
+    .about-avatar {
+      flex-shrink: 0; width: 56px; height: 56px;
+      background: var(--manila); color: #2b2418; border: 1.5px solid var(--manila-2); border-radius: var(--radius-sm);
+      display: flex; align-items: center; justify-content: center;
+      font-family: var(--font-title); font-size: 1.4rem; font-weight: 700;
+    }
+    .about-name { font-family: var(--font-title); font-size: 1.15rem; font-weight: 700; }
+    .about-role { font-size: .82rem; color: var(--muted); margin-top: 2px; }
+    .about-links { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+    .about-links .btn { flex: 0 1 auto; }
+    .donate {
+      margin-top: 18px; padding: 16px;
+      border: 1.5px dashed var(--kraft); border-radius: var(--radius-sm);
+      background: var(--paper-2);
+      display: flex; gap: 16px; align-items: center;
+    }
+    .donate-qr {
+      flex-shrink: 0; width: 132px; height: 132px; padding: 8px;
+      background: #fff; border: 1px solid var(--border); border-radius: var(--radius-sm);
+      display: flex; align-items: center; justify-content: center;
+    }
+    .donate-qr canvas, .donate-qr img { width: 114px !important; height: 114px !important; }
+    .donate-text h3 { font-family: var(--font-title); font-size: 1rem; margin-bottom: 4px; }
+    .donate-text p { font-size: .84rem; color: var(--muted); line-height: 1.5; margin-bottom: 10px; }
+    .donate-text .btn { width: auto; }
+
     /* ───────────────────────────── Phones ──────────────────────────────────── */
     @media (max-width: 480px) {
       header { padding: 14px 14px 0; }
@@ -528,6 +590,9 @@
       .code-input, .input-row input { font-size: 16px; }
       .pair-code-row { flex-direction: column; }
       .pair-code-row .btn { width: 100%; }
+      .app-footer { margin: 4px 14px 0; }
+      .donate { flex-direction: column; text-align: center; }
+      .donate-text .btn { width: 100%; }
     }
 
     /* Scrollbar */
@@ -611,6 +676,14 @@
 
     </div>
   </div>
+
+  <!-- ───── FOOTER ───── -->
+  <footer class="app-footer">
+    <span>© 2026 FileSwap</span>
+    <a href="#terms" data-info="terms" data-i18n="footer.terms">Términos de uso</a>
+    <a href="#privacy" data-info="privacy" data-i18n="footer.privacy">Privacidad</a>
+    <a href="#about" data-info="about" data-i18n="footer.about">Acerca de</a>
+  </footer>
 </div>
 
 <!-- ───── MODAL: Vincular ───── -->
@@ -711,6 +784,20 @@
   </div>
 </div>
 
+<!-- ───── MODAL: Términos / Privacidad / Acerca de ───── -->
+<div class="modal-overlay" id="info-modal">
+  <div class="modal" role="dialog" aria-labelledby="info-title">
+    <div class="info-head">
+      <div class="modal-title" id="info-title">—</div>
+      <button class="icon-close" id="info-x-btn" data-i18n-title="common.close" title="Cerrar" aria-label="Cerrar">✕</button>
+    </div>
+    <div id="info-body"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="info-close-btn" data-i18n="common.close">Cerrar</button>
+    </div>
+  </div>
+</div>
+
 <!-- ───── TOAST ───── -->
 <div id="toast"></div>
 
@@ -731,6 +818,23 @@ const ICE_SERVERS = [
 ];
 
 const CHUNK_SIZE  = 16 * 1024; // 16 KB per DataChannel chunk
+
+// ─── About / donations — EDIT WITH YOUR OWN DETAILS ──────────────────────
+// Shown in "Acerca de" and used as the contact in Terms / Privacy.
+// Empty strings hide that item; leave `paypal` empty to hide the donation box.
+const ABOUT = {
+  name:    'Tu nombre',
+  role:    { es: 'Creador de FileSwap', en: 'Creator of FileSwap' },
+  bio:     {
+    es: 'Escribe aquí unas líneas sobre ti: a qué te dedicas y por qué hiciste FileSwap.',
+    en: 'Write a few lines about yourself here: what you do and why you built FileSwap.',
+  },
+  email:   '',  // e.g. 'tu@correo.com'
+  website: '',  // e.g. 'https://tusitio.com'
+  source:  'https://github.com/SethSterling22/SwapFile',
+  paypal:  '',  // e.g. 'https://www.paypal.com/paypalme/TU_USUARIO' — the QR is generated from this link
+};
+const LEGAL_UPDATED = { es: '11 de noviembre de 2026', en: 'November 11, 2026' };
 const STORAGE_KEY        = 'fileswap_v1';
 const LEGACY_STORAGE_KEY = 'droplink_v1'; // app was called DropLink before
 const THEME_KEY          = 'fileswap_theme';
@@ -819,6 +923,20 @@ const I18N = {
     'toast.reLink':       '🔐 Seguridad actualizada: vuelve a vincular tus dispositivos',
     'device.default':     'Dispositivo',
 
+    'footer.terms':       'Términos de uso',
+    'footer.privacy':     'Privacidad',
+    'footer.about':       'Acerca de',
+    'info.terms':         'Términos y condiciones de uso',
+    'info.privacy':       'Política de privacidad',
+    'info.about':         'Acerca de',
+    'info.updated':       'Última actualización: {date}',
+    'about.email':        '✉️ Correo',
+    'about.website':      '🌐 Sitio web',
+    'about.source':       '💻 Código fuente',
+    'about.donateTitle':  'Apoya el proyecto',
+    'about.donateText':   'FileSwap es gratuito y sin anuncios. Si te resulta útil, puedes colaborar con una donación: escanea el código o usa el botón.',
+    'about.donateBtn':    'Donar con PayPal',
+
     // Server error codes
     'err.DEVICE_OFFLINE':     'El dispositivo no está conectado',
     'err.NOT_PAIRED':         'Los dispositivos no están vinculados',
@@ -904,6 +1022,20 @@ const I18N = {
     'toast.invalidCode':  '⚠️ Invalid code: it must look like xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx',
     'toast.reLink':       '🔐 Security upgraded: please link your devices again',
     'device.default':     'Device',
+
+    'footer.terms':       'Terms of use',
+    'footer.privacy':     'Privacy',
+    'footer.about':       'About',
+    'info.terms':         'Terms and conditions of use',
+    'info.privacy':       'Privacy policy',
+    'info.about':         'About',
+    'info.updated':       'Last updated: {date}',
+    'about.email':        '✉️ Email',
+    'about.website':      '🌐 Website',
+    'about.source':       '💻 Source code',
+    'about.donateTitle':  'Support the project',
+    'about.donateText':   'FileSwap is free and ad-free. If you find it useful, you can chip in with a donation: scan the code or use the button.',
+    'about.donateBtn':    'Donate with PayPal',
 
     'err.DEVICE_OFFLINE':     'The device is not connected',
     'err.NOT_PAIRED':         'The devices are not linked',
@@ -1516,6 +1648,193 @@ function copyText(text, okMsg) {
   }
 }
 
+// ─── Terms / Privacy / About ──────────────────────────────────────────────
+// Legal texts describe what the code actually does; keep them in sync with it.
+const LEGAL = {
+  es: {
+    terms: (contact) => `
+      <p class="summary">FileSwap es una herramienta gratuita para enviar archivos directamente entre navegadores. Úsala de forma responsable y solo con archivos que tengas derecho a compartir.</p>
+      <h3>1. Qué es FileSwap</h3>
+      <p>FileSwap conecta dos navegadores mediante WebRTC para que los archivos viajen directamente de uno a otro. El servidor solo ayuda a que los dispositivos se encuentren: los archivos no pasan por él ni se guardan en él.</p>
+      <h3>2. Aceptación</h3>
+      <p>Al usar FileSwap aceptas estos términos. Si no estás de acuerdo con ellos, no lo uses.</p>
+      <h3>3. Uso aceptable</h3>
+      <p>Te comprometes a:</p>
+      <ul>
+        <li>enviar solo archivos que tengas derecho a compartir;</li>
+        <li>no enviar malware, contenido ilegal ni material que infrinja derechos de terceros;</li>
+        <li>no intentar saturar el servicio, interferir con él ni acceder sin autorización a otros dispositivos;</li>
+        <li>aceptar vinculaciones solo de dispositivos cuyo código reconozcas.</li>
+      </ul>
+      <h3>4. Información sensible</h3>
+      <p>Los archivos van cifrados en tránsito por WebRTC (DTLS), pero FileSwap todavía no añade un cifrado de extremo a extremo propio. <strong>No lo uses para información sensible o regulada</strong>, como datos médicos o de pacientes, datos financieros o documentos de identidad.</p>
+      <h3>5. Sin garantías</h3>
+      <p>FileSwap se ofrece «tal cual» y «según disponibilidad», sin garantías de ningún tipo. Puede haber fallos, interrupciones o transferencias incompletas: conserva siempre tu copia original.</p>
+      <h3>6. Responsabilidad</h3>
+      <p>En la medida en que lo permita la ley, quien opera FileSwap no responde por daños derivados de su uso ni por el contenido que los usuarios intercambian entre sí. Cada usuario es responsable de lo que envía y de lo que acepta recibir.</p>
+      <h3>7. Código abierto</h3>
+      <p>El código fuente se distribuye bajo la licencia GPL-3.0 incluida en el repositorio. Estos términos regulan el uso de este servicio, no tus derechos sobre el código.</p>
+      <h3>8. Cambios</h3>
+      <p>Estos términos pueden actualizarse; la fecha de arriba indica la versión vigente. Seguir usando FileSwap después de un cambio implica aceptarlo.</p>
+      <h3>9. Contacto</h3>
+      <p>${contact}</p>`,
+    privacy: (contact) => `
+      <p class="summary">FileSwap no tiene cuentas, no usa cookies ni analítica, y el servidor nunca recibe el contenido de tus archivos.</p>
+      <h3>1. Tus archivos</h3>
+      <p>Viajan directamente de un navegador a otro por WebRTC, cifrados en tránsito (DTLS). No pasan por el servidor ni se almacenan en él. En el dispositivo que los recibe se quedan en la memoria de la pestaña hasta que la cierras o la recargas, salvo que los descargues.</p>
+      <h3>2. Qué maneja el servidor</h3>
+      <p>Para conectar los dispositivos, el servidor de señalización maneja, solo en memoria:</p>
+      <ul>
+        <li>el código de tu dispositivo (UUID) y el nombre que le pusiste;</li>
+        <li>los códigos de los dispositivos con los que lo vinculaste;</li>
+        <li>tu dirección IP, necesaria para la conexión;</li>
+        <li>los mensajes técnicos que abren la conexión directa (SDP/ICE), que contienen direcciones de red.</li>
+      </ul>
+      <p>Esta información se borra al desconectarte o cuando se reinicia el servidor; no hay base de datos. Los registros técnicos de errores del servidor pueden incluir tu dirección IP.</p>
+      <h3>3. Qué se guarda en tu navegador</h3>
+      <p>En el almacenamiento local (localStorage) se guardan una clave secreta que identifica a tu dispositivo, su código y nombre, la lista de dispositivos vinculados y tus preferencias de tema e idioma. Puedes borrarlo todo eliminando los datos de este sitio desde tu navegador.</p>
+      <h3>4. Terceros</h3>
+      <ul>
+        <li><strong>Google</strong> (servidores STUN): ayudan a establecer la conexión directa y ven tu IP pública.</li>
+        <li><strong>Cloudflare</strong> (cdnjs): sirve la librería que dibuja los códigos QR y ve tu IP al descargarla.</li>
+        <li><strong>El otro dispositivo</strong>: en una conexión directa, cada parte puede ver la dirección IP de la otra.</li>
+        <li><strong>PayPal</strong>: solo si usas el enlace de donación; se rige por su propia política de privacidad.</li>
+      </ul>
+      <h3>5. Lo que no hacemos</h3>
+      <p>No vendemos ni compartimos datos, no usamos cookies, rastreadores ni analítica, y no creamos perfiles de uso.</p>
+      <h3>6. Tus derechos</h3>
+      <p>Como no hay cuentas, no guardamos datos personales a tu nombre de forma persistente. Para dejar de usar FileSwap basta con desvincular tus dispositivos y borrar los datos del sitio. Si tienes preguntas, contacta: ${contact}</p>
+      <h3>7. Cambios</h3>
+      <p>Cualquier cambio se publicará en esta página con una nueva fecha.</p>`,
+  },
+  en: {
+    terms: (contact) => `
+      <p class="summary">FileSwap is a free tool to send files directly between browsers. Use it responsibly and only with files you have the right to share.</p>
+      <h3>1. What FileSwap is</h3>
+      <p>FileSwap connects two browsers over WebRTC so files travel directly from one to the other. The server only helps devices find each other: files never go through it and are never stored on it.</p>
+      <h3>2. Acceptance</h3>
+      <p>By using FileSwap you accept these terms. If you don’t agree with them, don’t use it.</p>
+      <h3>3. Acceptable use</h3>
+      <p>You agree to:</p>
+      <ul>
+        <li>only send files you have the right to share;</li>
+        <li>not send malware, illegal content or material that infringes the rights of others;</li>
+        <li>not try to overload or interfere with the service, or access other devices without authorization;</li>
+        <li>only accept link requests from devices whose code you recognize.</li>
+      </ul>
+      <h3>4. Sensitive information</h3>
+      <p>Files are encrypted in transit by WebRTC (DTLS), but FileSwap does not yet add its own end-to-end encryption. <strong>Do not use it for sensitive or regulated information</strong>, such as medical or patient data, financial data or identity documents.</p>
+      <h3>5. No warranty</h3>
+      <p>FileSwap is provided “as is” and “as available”, without warranties of any kind. Failures, outages or incomplete transfers may happen: always keep your original copy.</p>
+      <h3>6. Liability</h3>
+      <p>To the extent permitted by law, whoever operates FileSwap is not liable for damages arising from its use, nor for the content users exchange with each other. Each user is responsible for what they send and what they agree to receive.</p>
+      <h3>7. Open source</h3>
+      <p>The source code is distributed under the GPL-3.0 license included in the repository. These terms govern the use of this service, not your rights to the code.</p>
+      <h3>8. Changes</h3>
+      <p>These terms may be updated; the date above shows the current version. Continuing to use FileSwap after a change means you accept it.</p>
+      <h3>9. Contact</h3>
+      <p>${contact}</p>`,
+    privacy: (contact) => `
+      <p class="summary">FileSwap has no accounts, uses no cookies or analytics, and the server never receives the contents of your files.</p>
+      <h3>1. Your files</h3>
+      <p>They travel directly from one browser to another over WebRTC, encrypted in transit (DTLS). They never go through the server and are never stored on it. On the receiving device they stay in the tab’s memory until you close or reload it, unless you download them.</p>
+      <h3>2. What the server handles</h3>
+      <p>To connect devices, the signaling server handles, in memory only:</p>
+      <ul>
+        <li>your device code (UUID) and the name you gave it;</li>
+        <li>the codes of the devices you linked it with;</li>
+        <li>your IP address, which the connection needs;</li>
+        <li>the technical messages that open the direct connection (SDP/ICE), which contain network addresses.</li>
+      </ul>
+      <p>This information is deleted when you disconnect or when the server restarts; there is no database. The server’s technical error logs may include your IP address.</p>
+      <h3>3. What is stored in your browser</h3>
+      <p>Local storage (localStorage) keeps a secret key that identifies your device, its code and name, the list of linked devices and your theme and language preferences. You can delete all of it by clearing this site’s data in your browser.</p>
+      <h3>4. Third parties</h3>
+      <ul>
+        <li><strong>Google</strong> (STUN servers): help set up the direct connection and see your public IP.</li>
+        <li><strong>Cloudflare</strong> (cdnjs): serves the library that draws the QR codes and sees your IP when downloading it.</li>
+        <li><strong>The other device</strong>: in a direct connection, each side can see the other’s IP address.</li>
+        <li><strong>PayPal</strong>: only if you use the donation link; its own privacy policy applies.</li>
+      </ul>
+      <h3>5. What we don’t do</h3>
+      <p>We don’t sell or share data, we don’t use cookies, trackers or analytics, and we don’t build usage profiles.</p>
+      <h3>6. Your rights</h3>
+      <p>Since there are no accounts, we don’t persistently keep personal data under your name. To stop using FileSwap, just unlink your devices and clear the site’s data. If you have questions, contact: ${contact}</p>
+      <h3>7. Changes</h3>
+      <p>Any change will be published on this page with a new date.</p>`,
+  },
+};
+
+// Only allow http(s)/mailto links from the ABOUT config
+function safeUrl(u) { return /^(https?:\/\/|mailto:)/i.test(u) ? u : ''; }
+
+function contactHtml() {
+  if (ABOUT.email)   return `<a href="mailto:${escHtml(ABOUT.email)}">${escHtml(ABOUT.email)}</a>`;
+  if (ABOUT.website) return `<a href="${escHtml(safeUrl(ABOUT.website))}" target="_blank" rel="noopener">${escHtml(ABOUT.website)}</a>`;
+  return `<a href="${escHtml(safeUrl(ABOUT.source))}" target="_blank" rel="noopener">${escHtml(ABOUT.source)}</a>`;
+}
+
+function aboutHtml() {
+  const initials = ABOUT.name.split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0].toUpperCase()).join('') || '?';
+  const link = (url, key) => safeUrl(url)
+    ? `<a class="btn btn-ghost btn-sm" href="${escHtml(safeUrl(url))}" target="_blank" rel="noopener">${t(key)}</a>` : '';
+  const paypal = safeUrl(ABOUT.paypal);
+  return `
+    <div class="about-person">
+      <div class="about-avatar">${escHtml(initials)}</div>
+      <div>
+        <div class="about-name">${escHtml(ABOUT.name)}</div>
+        <div class="about-role">${escHtml(ABOUT.role[lang] ?? '')}</div>
+      </div>
+    </div>
+    <div class="doc" style="margin-top:12px"><p>${escHtml(ABOUT.bio[lang] ?? '')}</p></div>
+    <div class="about-links">
+      ${ABOUT.email ? link('mailto:' + ABOUT.email, 'about.email') : ''}
+      ${link(ABOUT.website, 'about.website')}
+      ${link(ABOUT.source, 'about.source')}
+    </div>
+    ${paypal ? `
+    <div class="donate">
+      <div class="donate-qr" id="donate-qr"></div>
+      <div class="donate-text">
+        <h3>${t('about.donateTitle')}</h3>
+        <p>${t('about.donateText')}</p>
+        <a class="btn btn-primary" href="${escHtml(paypal)}" target="_blank" rel="noopener">${t('about.donateBtn')}</a>
+      </div>
+    </div>` : ''}`;
+}
+
+let currentInfo = null; // 'terms' | 'privacy' | 'about' | null
+
+function renderInfo() {
+  if (!currentInfo) return;
+  document.getElementById('info-title').textContent = t(`info.${currentInfo}`);
+  const body = document.getElementById('info-body');
+  if (currentInfo === 'about') {
+    body.innerHTML = aboutHtml();
+    const qrBox = document.getElementById('donate-qr');
+    if (qrBox && typeof QRCode !== 'undefined') {
+      new QRCode(qrBox, { text: safeUrl(ABOUT.paypal), width: 114, height: 114, colorDark: '#000000', colorLight: '#ffffff', correctLevel: QRCode.CorrectLevel.M });
+    }
+  } else {
+    body.innerHTML = `<div class="doc"><div class="updated">${t('info.updated', { date: LEGAL_UPDATED[lang] })}</div>${LEGAL[lang][currentInfo](contactHtml())}</div>`;
+  }
+}
+
+function openInfo(which) {
+  currentInfo = which;
+  renderInfo();
+  history.replaceState(null, '', `#${which}`); // shareable link, e.g. /#privacy
+  openModal('info-modal');
+  document.querySelector('#info-modal .modal').scrollTop = 0;
+}
+
+function closeInfo() {
+  currentInfo = null;
+  closeModal('info-modal');
+  history.replaceState(null, '', location.pathname + location.search);
+}
+
 // ─── Language ─────────────────────────────────────────────────────────────
 function applyLang(next) {
   lang = next;
@@ -1533,6 +1852,7 @@ function applyLang(next) {
   document.getElementById('conn-label').textContent     = t(`conn.${connState}`);
   document.getElementById('transfer-title').textContent = t(transferTitleKey);
   if (state.deviceName) { updateMyCard(); renderPeers(); renderReceived(); }
+  renderInfo();
 }
 
 // ─── Theme ────────────────────────────────────────────────────────────────
@@ -1680,11 +2000,19 @@ document.getElementById('transfer-cancel-btn').addEventListener('click', () => {
   }
 });
 
+// Footer links → Terms / Privacy / About
+for (const a of document.querySelectorAll('[data-info]')) {
+  a.addEventListener('click', (e) => { e.preventDefault(); openInfo(a.dataset.info); });
+}
+document.getElementById('info-close-btn').addEventListener('click', closeInfo);
+document.getElementById('info-x-btn').addEventListener('click', closeInfo);
+
 // Close modal on overlay click
 document.querySelectorAll('.modal-overlay').forEach(overlay => {
   overlay.addEventListener('click', (e) => {
     if (e.target === overlay && overlay.id !== 'transfer-modal') {
-      overlay.classList.remove('open');
+      if (overlay.id === 'info-modal') closeInfo();
+      else overlay.classList.remove('open');
     }
   });
 });
@@ -1704,6 +2032,7 @@ function bootApp() {
 // Start
 applyTheme(document.documentElement.dataset.theme);
 applyLang(lang);
+if (['terms', 'privacy', 'about'].includes(location.hash.slice(1))) openInfo(location.hash.slice(1));
 loadState();
 if (state.deviceName) {
   bootApp();
