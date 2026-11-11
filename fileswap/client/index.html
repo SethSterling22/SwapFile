@@ -209,6 +209,14 @@
     }
     .btn-ghost:hover { border-color: var(--kraft); }
     .btn-ghost:active { transform: translateY(1px); }
+    .btn-danger {
+      background: var(--red); color: #fff; width: 100%;
+      border-color: var(--red);
+      box-shadow: 0 2px 0 rgba(0, 0, 0, .25);
+    }
+    .btn-danger:hover { filter: brightness(1.08); }
+    [data-theme="dark"] .btn-danger { color: #1c1812; }
+    .btn-danger:active { transform: translateY(2px); box-shadow: none; }
     .btn-sm { padding: 7px 12px; font-size: .8rem; }
     .btn-row { display: flex; gap: 8px; }
     .btn-row .btn { flex: 1; }
@@ -498,7 +506,7 @@
     #toast.show { transform: translateX(-50%) translateY(0) rotate(-1deg); }
 
     /* Pair request */
-    #pair-request-modal .requester-name {
+    #pair-request-modal .requester-name, #unlink-modal .unlink-name {
       font-family: var(--font-title); font-weight: 700; font-size: 1.05rem; color: var(--ink);
     }
 
@@ -784,6 +792,43 @@
   </div>
 </div>
 
+<!-- ───── MODAL: Renombrar dispositivo ───── -->
+<div class="modal-overlay" id="rename-modal">
+  <form class="modal" id="rename-form" role="dialog" aria-labelledby="rename-title">
+    <div>
+      <div class="modal-title" id="rename-title" data-i18n="rename.title">Renombrar dispositivo</div>
+      <div class="modal-sub" style="margin-top:4px" data-i18n="rename.sub">El nombre es solo una etiqueta; el código de este dispositivo no cambia.</div>
+    </div>
+    <div class="input-row">
+      <label for="rename-input" data-i18n="rename.label">Nombre</label>
+      <input id="rename-input" type="text" maxlength="50" autocomplete="off" data-i18n-placeholder="setup.placeholder" placeholder="Ej: PC Oficina, MacBook Ana…" />
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-primary" type="submit" data-i18n="rename.save">Guardar</button>
+      <button class="btn btn-ghost" type="button" id="rename-cancel-btn" data-i18n="common.cancel">Cancelar</button>
+    </div>
+  </form>
+</div>
+
+<!-- ───── MODAL: Desvincular ───── -->
+<div class="modal-overlay" id="unlink-modal">
+  <div class="modal" role="dialog" aria-labelledby="unlink-title">
+    <div class="modal-title" id="unlink-title" data-i18n="unlink.title">Desvincular dispositivo</div>
+    <div class="modal-sub">
+      <span class="unlink-name" id="unlink-name">—</span>
+      <span data-i18n="unlink.body">dejará de aparecer en tu lista. Para volver a enviarle archivos tendrás que vincularlo de nuevo.</span>
+    </div>
+    <div>
+      <div class="field-label" style="margin-bottom:6px" data-i18n="request.code">Código del dispositivo</div>
+      <div class="code-box" id="unlink-id">—</div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-danger" id="unlink-confirm-btn" data-i18n="unlink.confirm">Desvincular</button>
+      <button class="btn btn-ghost" id="unlink-cancel-btn" data-i18n="common.cancel">Cancelar</button>
+    </div>
+  </div>
+</div>
+
 <!-- ───── MODAL: Términos / Privacidad / Acerca de ───── -->
 <div class="modal-overlay" id="info-modal">
   <div class="modal" role="dialog" aria-labelledby="info-title">
@@ -908,7 +953,6 @@ const I18N = {
     'toast.sendError':    '⚠️ Error en la transferencia',
     'toast.received':     '✅ Archivo recibido de {name}',
     'toast.receiveError': '⚠️ Error al recibir el archivo',
-    'toast.unlinkAsk':    '¿Desvincular {name}?',
     'toast.unlinked':     '🗑 {name} desvinculado',
     'toast.connecting':   'Conectando con el servidor…',
     'toast.ownCode':      'Ese es el código de este mismo dispositivo',
@@ -916,7 +960,13 @@ const I18N = {
     'toast.requestSent':  'Solicitud enviada a {name}… acéptala en el otro dispositivo',
     'toast.copyFailed':   '⚠️ No se pudo copiar; selecciónalo y cópialo a mano',
     'toast.nameRequired': 'Ingresa un nombre para este dispositivo',
-    'toast.renameAsk':    'Nuevo nombre para este dispositivo:',
+    'rename.title':       'Renombrar dispositivo',
+    'rename.sub':         'El nombre es solo una etiqueta; el código de este dispositivo no cambia.',
+    'rename.label':       'Nombre',
+    'rename.save':        'Guardar',
+    'unlink.title':       'Desvincular dispositivo',
+    'unlink.body':        'dejará de aparecer en tu lista. Para volver a enviarle archivos tendrás que vincularlo de nuevo.',
+    'unlink.confirm':     'Desvincular',
     'toast.codeCopied':   '📋 Código copiado',
     'toast.linkCopied':   '🔗 Enlace copiado',
     'toast.invalidCode':  '⚠️ Código no válido: debe tener el formato xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx',
@@ -1008,7 +1058,6 @@ const I18N = {
     'toast.sendError':    '⚠️ Transfer error',
     'toast.received':     '✅ File received from {name}',
     'toast.receiveError': '⚠️ Error receiving the file',
-    'toast.unlinkAsk':    'Unlink {name}?',
     'toast.unlinked':     '🗑 {name} unlinked',
     'toast.connecting':   'Connecting to the server…',
     'toast.ownCode':      'That’s this device’s own code',
@@ -1016,7 +1065,13 @@ const I18N = {
     'toast.requestSent':  'Request sent to {name}… accept it on the other device',
     'toast.copyFailed':   '⚠️ Couldn’t copy; select it and copy it manually',
     'toast.nameRequired': 'Enter a name for this device',
-    'toast.renameAsk':    'New name for this device:',
+    'rename.title':       'Rename device',
+    'rename.sub':         'The name is just a label; this device’s code does not change.',
+    'rename.label':       'Name',
+    'rename.save':        'Save',
+    'unlink.title':       'Unlink device',
+    'unlink.body':        'will be removed from your list. To send it files again you will have to pair it again.',
+    'unlink.confirm':     'Unlink',
     'toast.codeCopied':   '📋 Code copied',
     'toast.linkCopied':   '🔗 Link copied',
     'toast.invalidCode':  '⚠️ Invalid code: it must look like xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx',
@@ -1497,8 +1552,20 @@ function renderPeers() {
   }
 }
 
+let unlinkTarget = null;
+
 function unlinkDevice(id, name) {
-  if (!confirm(t('toast.unlinkAsk', { name }))) return;
+  unlinkTarget = { id, name };
+  document.getElementById('unlink-name').textContent = name;
+  document.getElementById('unlink-id').textContent   = id;
+  openModal('unlink-modal');
+}
+
+function confirmUnlink() {
+  if (!unlinkTarget) return;
+  const { id, name } = unlinkTarget;
+  unlinkTarget = null;
+  closeModal('unlink-modal');
   wsSend({ type: 'unpair', with: id });
   removePair(id);
   renderPeers();
@@ -1878,15 +1945,28 @@ document.getElementById('setup-name').addEventListener('keydown', (e) => {
   if (e.key === 'Enter') document.getElementById('setup-btn').click();
 });
 
+const renameInput = document.getElementById('rename-input');
 document.getElementById('edit-name-btn').addEventListener('click', () => {
-  const name = prompt(t('toast.renameAsk'), state.deviceName);
-  if (name && name.trim()) {
-    state.deviceName = name.trim();
-    saveState();
-    updateMyCard();
-    if (wsReady) wsSend(registerMsg());
-  }
+  renameInput.value = state.deviceName;
+  openModal('rename-modal');
+  renameInput.focus();
+  renameInput.select();
 });
+document.getElementById('rename-form').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const name = renameInput.value.trim();
+  if (!name) { toast(t('toast.nameRequired')); renameInput.focus(); return; }
+  closeModal('rename-modal');
+  if (name === state.deviceName) return;
+  state.deviceName = name;
+  saveState();
+  updateMyCard();
+  if (wsReady) wsSend(registerMsg());
+});
+document.getElementById('rename-cancel-btn').addEventListener('click', () => closeModal('rename-modal'));
+
+document.getElementById('unlink-confirm-btn').addEventListener('click', confirmUnlink);
+document.getElementById('unlink-cancel-btn').addEventListener('click', () => closeModal('unlink-modal'));
 
 document.getElementById('add-device-btn').addEventListener('click', showQRModal);
 
@@ -2015,6 +2095,15 @@ document.querySelectorAll('.modal-overlay').forEach(overlay => {
       else overlay.classList.remove('open');
     }
   });
+});
+
+// Close modal on Escape
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape') return;
+  const open = [...document.querySelectorAll('.modal-overlay.open')].pop();
+  if (!open || open.id === 'transfer-modal') return;
+  if (open.id === 'info-modal') closeInfo();
+  else open.classList.remove('open');
 });
 
 // ═══════════════════════════════════════════════════════════════
