@@ -44,7 +44,9 @@ jobs:
           cache-dependency-path: fileswap-cli/go.mod
       - name: Version
         run: |
-          if [ "${GITHUB_REF_TYPE}" = tag ]; then v="${GITHUB_REF_NAME}"; else v="$(git describe --tags --match 'v*' --always)"; fi
+          # Packages need a version that starts with a digit: without a v* tag, use v0.0.0-<commit>
+          if [ "${GITHUB_REF_TYPE}" = tag ]; then v="${GITHUB_REF_NAME}"
+          else v="$(git describe --tags --match 'v*' 2>/dev/null || echo "v0.0.0-$(git rev-parse --short HEAD)")"; fi
           echo "VERSION=$v" >> "$GITHUB_ENV"
           echo "version: $v"
       - run: make release VERSION="$VERSION"

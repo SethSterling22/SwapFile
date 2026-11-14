@@ -1,7 +1,8 @@
 # FileSwap CLI — build helpers. Binaries are static (CGO_ENABLED=0), so the
 # same file runs on Arch, Debian and any other Linux of that architecture.
 
-VERSION ?= $(shell git describe --tags --match 'v*' --always --dirty 2>/dev/null || echo dev)
+# Packages need a version that starts with a digit, so without a v* tag use v0.0.0-<commit>.
+VERSION ?= $(shell git describe --tags --match 'v*' --dirty 2>/dev/null || echo v0.0.0-$$(git rev-parse --short HEAD 2>/dev/null || echo dev))
 ARCHES  ?= amd64 arm64
 LDFLAGS := -s -w -X main.version=$(VERSION)
 GO_IMAGE ?= golang:1
