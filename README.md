@@ -20,6 +20,8 @@ FileSwap connects two browser sessions directly using WebRTC DataChannels. The s
 
 If a paired device is offline (grey indicator), sending is blocked — there is nowhere for the file to go.
 
+There is also a **command-line node** for Linux servers — see [FileSwap CLI](#fileswap-cli-for-servers) below.
+
 The interface is available in **Spanish and English**. It follows the browser's language (any `es-*` → Spanish, otherwise English) until the user picks one with the **ES/EN** button in the header; the choice is saved per browser. Light/dark mode works the same way with the ☾/☀ button.
 
 ---
@@ -72,6 +74,8 @@ Device A                  Server                  Device B
 
 ### WebRTC File Transfer
 
+Each transfer opens its own connection; the full message format is in [docs/protocol.md](docs/protocol.md).
+
 ```
 Sender                    Server                  Receiver
    │                        │                        │
@@ -86,6 +90,7 @@ Sender                    Server                  Receiver
    │═══ [metadata frame] ══════════════════════════▶ │
    │═══ [16 KB chunk × N] ════════════════════════▶  │
    │═══ [end frame] ══════════════════════════════▶  │
+   │◀══ [ack: ok, size, sha256] ═════════════════════ │
    │                        │              [download link rendered]
 ```
 
@@ -94,6 +99,9 @@ Sender                    Server                  Receiver
 ## Project Structure
 
 ```
+docs/
+└── protocol.md             # Signaling + transfer protocol shared by web and CLI
+fileswap-cli/               # Command-line node for Linux servers (Go) — see its README
 fileswap/
 ├── client/
 │   └── index.html          # Full SPA — HTML, CSS, and JS in a single file
@@ -157,6 +165,20 @@ npm test
 ```
 
 Integration tests (`node:test`) spawn the real server and exercise registration, pairing, signal relay, reconnection and idle expiry over WebSocket.
+
+---
+
+## FileSwap CLI (for servers)
+
+[`fileswap-cli/`](fileswap-cli/README.md) is a single static binary that joins the same network as the web app, so files can go **from a browser straight to a Linux server** (or back, or between servers) from the terminal:
+
+```bash
+fileswap init --name srv-01 --server 192.168.1.10:7341
+fileswap id                              # code + pairing link for the browser
+fileswap tfr laptop ./backup.tar.gz      # (coming) send to a paired device
+```
+
+`.deb` (Debian/Ubuntu), Arch packages and plain binaries for `amd64`/`arm64` are published on [GitHub Releases](https://github.com/SethSterling22/SwapFile/releases). It is in early development; see its [roadmap](fileswap-cli/README.md#roadmap).
 
 ---
 
@@ -251,7 +273,8 @@ Copy `server/.env.example` → `server/.env`.
 
 - [ ] **v1.1** — E2E encryption (ECDH X25519 key exchange + AES-GCM 256-bit per-chunk)
 - [ ] **v1.1** — Multi-file drag-and-drop transfer
-- [ ] **v1.1** — Bidirectional transfer (desktop → mobile)
+- [x] **v1.1** — Bidirectional transfer (one WebRTC connection per transfer, receipt ack + SHA-256)
+- [ ] **v1.2** — CLI node for Linux servers ([fileswap-cli](fileswap-cli/README.md))
 - [ ] **v1.2** — Image preview before download on receiver side
 - [ ] **v2.0** — File System Access API streaming for files > 2 GB
 - [ ] **v2.0** — One-to-many (broadcast to multiple paired devices simultaneously)

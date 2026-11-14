@@ -1,0 +1,82 @@
+name: CLI
+
+# Tests and packages the fileswap CLI on every PR and push to main.
+# Pushing a tag vX.Y.Z also publishes the binaries and packages as a GitHub Release.
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: fileswap-cli
+
+jobs:
+  test:
+    name: CLI tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: fileswap-cli/go.mod
+          cache-dependency-path: fileswap-cli/go.mod
+      - name: gofmt
+        run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
+      - run: make test
+
+  package:
+    name: Build, package, smoke test (Debian + Arch)
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # git describe needs the tags
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: fileswap-cli/go.mod
+          cache-dependency-path: fileswap-cli/go.mod
+      - name: Version
+        run: |
+          # Packages need a version that starts with a digit: without a v* tag, use v0.0.0-<commit>
+          if [ "${GITHUB_REF_TYPE}" = tag ]; then v="${GITHUB_REF_NAME}"
+          else v="$(git describe --tags --match 'v*' 2>/dev/null || echo "v0.0.0-$(git rev-parse --short HEAD)")"; fi
+          echo "VERSION=$v" >> "$GITHUB_ENV"
+          echo "version: $v"
+      - run: make release VERSION="$VERSION"
+      - name: Install and run in debian:stable and archlinux:latest
+        run: ./packaging/smoke.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fileswap-release
+          path: fileswap-cli/dist/release/
+          if-no-files-found: error
+
+  release:
+    name: Publish GitHub Release
+    if: github.ref_type == 'tag'
+    needs: package
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: fileswap-release
+          path: fileswap-cli/dist/release
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          flags=""
+          case "$GITHUB_REF_NAME" in *-*) flags="--prerelease" ;; esac
+          gh release create "$GITHUB_REF_NAME" dist/release/* \
+            --verify-tag --generate-notes $flags \
+            --title "FileSwap $GITHUB_REF_NAME"

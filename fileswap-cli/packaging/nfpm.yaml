@@ -1,0 +1,29 @@
+# nfpm config for the .deb (Debian/Ubuntu) and Arch Linux packages.
+# Used by `make package` and the release workflow; VERSION and ARCH come
+# from the environment (ARCH is amd64 or arm64 — nfpm maps it to x86_64 /
+# aarch64 for Arch).
+name: fileswap
+arch: ${ARCH}
+platform: linux
+version: ${VERSION}
+section: net
+priority: optional
+maintainer: SethSterling22 <https://github.com/SethSterling22>
+description: |
+  FileSwap command-line node. Pairs with browsers and other FileSwap
+  nodes and sends files peer to peer over WebRTC.
+homepage: https://github.com/SethSterling22/SwapFile
+license: GPL-3.0-only
+contents:
+  - src: ./dist/pkg/fileswap   # copy of dist/fileswap-linux-${ARCH}, see Makefile
+    dst: /usr/bin/fileswap
+    file_info:
+      mode: 0755
+  - src: ./README.md
+    dst: /usr/share/doc/fileswap/README.md
+  - src: ../LICENSE
+    dst: /usr/share/licenses/fileswap/LICENSE
+    packager: archlinux
+  - src: ../LICENSE
+    dst: /usr/share/doc/fileswap/copyright
+    packager: deb
