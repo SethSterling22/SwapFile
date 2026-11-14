@@ -945,12 +945,14 @@ const I18N = {
     'transfer.sending':   'Enviando…',
     'transfer.receiving': 'Recibiendo…',
     'transfer.done':      'Completado',
+    'transfer.waitingAck':'Esperando confirmación…',
 
     'toast.peerOnline':   '🟢 {name} está en línea',
     'toast.peerOffline':  '⚫ {name} se desconectó',
     'toast.paired':       '✅ Vinculado con {name}',
     'toast.rejected':     '❌ Solicitud rechazada',
     'toast.sendError':    '⚠️ Error en la transferencia',
+    'toast.sendFailed':   '⚠️ El otro dispositivo no recibió el archivo completo',
     'toast.received':     '✅ Archivo recibido de {name}',
     'toast.receiveError': '⚠️ Error al recibir el archivo',
     'toast.unlinked':     '🗑 {name} desvinculado',
@@ -1050,12 +1052,14 @@ const I18N = {
     'transfer.sending':   'Sending…',
     'transfer.receiving': 'Receiving…',
     'transfer.done':      'Done',
+    'transfer.waitingAck':'Waiting for confirmation…',
 
     'toast.peerOnline':   '🟢 {name} is online',
     'toast.peerOffline':  '⚫ {name} went offline',
     'toast.paired':       '✅ Linked with {name}',
     'toast.rejected':     '❌ Request rejected',
     'toast.sendError':    '⚠️ Transfer error',
+    'toast.sendFailed':   '⚠️ The other device did not receive the whole file',
     'toast.received':     '✅ File received from {name}',
     'toast.receiveError': '⚠️ Error receiving the file',
     'toast.unlinked':     '🗑 {name} unlinked',
@@ -1137,7 +1141,6 @@ let state = {
 let ws        = null;
 let wsReady   = false;
 let connState = 'connecting'; // connecting | online | reconnecting | replaced
-let peerConns = {}; // deviceId → RTCPeerConnection
 let pendingPairRequest = null; // {id, name}
 let sendTarget = null; // deviceId of current send target
 let selectedFile = null;
@@ -1321,90 +1324,160 @@ function removePair(id) {
 // ═══════════════════════════════════════════════════════════════
 //  WEBRTC — SIGNAL HANDLING
 // ═══════════════════════════════════════════════════════════════
-async function handleSignal(fromId, data) {
-  // Defense in depth: the server already checks this
-  if (!state.pairs.find(p => p.id === fromId) || !data) return;
-  if (data.type === 'offer') {
-    // We are the receiver
-    const pc = getOrCreatePC(fromId, false);
-    await pc.setRemoteDescription(new RTCSessionDescription(data));
-    const answer = await pc.createAnswer();
-    await pc.setLocalDescription(answer);
-    wsSend({ type: 'signal', to: fromId, data: { type: 'answer', sdp: answer.sdp } });
-  } else if (data.type === 'answer') {
-    const pc = peerConns[fromId];
-    if (pc) await pc.setRemoteDescription(new RTCSessionDescription(data));
-  } else if (data.type === 'candidate') {
-    const pc = peerConns[fromId];
-    if (pc && data.candidate) {
-      try { await pc.addIceCandidate(new RTCIceCandidate(data.candidate)); } catch {}
-    }
-  }
+// Every transfer gets its own RTCPeerConnection, identified by a transfer id
+// (tid) carried in each signal (docs/protocol.md). Connections are never
+// reused, so A→B followed by B→A works, and so does a CLI that exits between
+// transfers.
+const transfers = new Map(); // tid → { pc, peerId, candidates, remoteSet }
+const MAX_QUEUED_CANDIDATES = 64;
+const ACK_TIMEOUT_MS = 60000;
+const CONNECT_TIMEOUT_MS = 30000;
+const HASH_MAX_BYTES = 512 * 1024 * 1024; // larger files are only checked by size
+
+function newTid() {
+  const b = new Uint8Array(16);
+  crypto.getRandomValues(b);
+  return Array.from(b, x => x.toString(16).padStart(2, '0')).join('');
 }
 
-function getOrCreatePC(peerId, isSender) {
-  if (peerConns[peerId]) return peerConns[peerId];
-
+function createTransfer(tid, peerId) {
   const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
-  peerConns[peerId] = pc;
+  const tr = { pc, peerId, candidates: [], remoteSet: false };
+  transfers.set(tid, tr);
 
   pc.onicecandidate = (ev) => {
     if (ev.candidate) {
-      wsSend({ type: 'signal', to: peerId, data: { type: 'candidate', candidate: ev.candidate.toJSON() } });
+      wsSend({ type: 'signal', to: peerId, data: { type: 'candidate', tid, candidate: ev.candidate.toJSON() } });
     }
   };
-
   pc.onconnectionstatechange = () => {
-    if (['failed', 'closed', 'disconnected'].includes(pc.connectionState)) {
-      pc.close();
-      delete peerConns[peerId];
-    }
+    if (['failed', 'closed'].includes(pc.connectionState)) endTransfer(tid);
   };
+  pc.ondatachannel = (ev) => setupReceiveChannel(ev.channel, peerId, tid);
+  return tr;
+}
 
-  if (!isSender) {
-    pc.ondatachannel = (ev) => {
-      setupReceiveChannel(ev.channel, peerId);
-    };
+function endTransfer(tid) {
+  const tr = transfers.get(tid);
+  if (!tr) return;
+  transfers.delete(tid);
+  try { tr.pc.close(); } catch {}
+}
+
+// Candidates can arrive while setRemoteDescription is still pending; they are
+// queued and added once the remote description is set.
+async function setRemote(tr, desc) {
+  await tr.pc.setRemoteDescription(desc);
+  tr.remoteSet = true;
+  for (const c of tr.candidates.splice(0)) {
+    try { await tr.pc.addIceCandidate(c); } catch {}
   }
+}
 
-  return pc;
+async function handleSignal(fromId, data) {
+  // Defense in depth: the server already checks this
+  if (!state.pairs.find(p => p.id === fromId) || !data) return;
+  // Clients before protocol v1 send no tid: one transfer at a time per peer
+  const tid = typeof data.tid === 'string' && /^[0-9a-f]{8,64}$/.test(data.tid) ? data.tid : `legacy:${fromId}`;
+  let tr = transfers.get(tid);
+  if (tr && tr.peerId !== fromId) return;
+  try {
+    if (data.type === 'offer') {
+      if (tr) {
+        if (!tid.startsWith('legacy:')) return; // duplicate offer
+        endTransfer(tid);
+      }
+      tr = createTransfer(tid, fromId);
+      await setRemote(tr, { type: 'offer', sdp: data.sdp });
+      const answer = await tr.pc.createAnswer();
+      await tr.pc.setLocalDescription(answer);
+      wsSend({ type: 'signal', to: fromId, data: { type: 'answer', sdp: answer.sdp, tid: data.tid } });
+    } else if (data.type === 'answer') {
+      if (tr && !tr.remoteSet) await setRemote(tr, { type: 'answer', sdp: data.sdp });
+    } else if (data.type === 'candidate') {
+      if (!tr || !data.candidate) return;
+      if (tr.remoteSet) {
+        try { await tr.pc.addIceCandidate(data.candidate); } catch {}
+      } else if (tr.candidates.length < MAX_QUEUED_CANDIDATES) {
+        tr.candidates.push(data.candidate);
+      }
+    }
+  } catch (err) {
+    console.warn('signal', data.type, err);
+    endTransfer(tid);
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════
 //  FILE SEND
 // ═══════════════════════════════════════════════════════════════
+let currentSendTid = null;
+
 async function sendFile(targetId, file) {
-  const pc = getOrCreatePC(targetId, true);
+  const tid = newTid();
+  const { pc } = createTransfer(tid, targetId);
   const dc = pc.createDataChannel('fileswap-file', { ordered: true });
+  dc.binaryType = 'arraybuffer';
+  currentSendTid = tid;
 
   openTransferModal('transfer.sending', file.name);
+
+  let finished = false;
+  let ackTimer = null;
+  const openTimer = setTimeout(() => finish(false), CONNECT_TIMEOUT_MS);
+  const finish = (ok, errKey = 'toast.sendError') => {
+    if (finished) return;
+    finished = true;
+    clearTimeout(openTimer);
+    clearTimeout(ackTimer);
+    if (currentSendTid === tid) currentSendTid = null;
+    if (ok) {
+      updateProgress(100, t('transfer.done'));
+      setTimeout(() => closeModal('transfer-modal'), 1200);
+    } else {
+      closeModal('transfer-modal');
+      toast(t(errKey));
+    }
+    endTransfer(tid);
+  };
 
   dc.bufferedAmountLowThreshold = 64 * 1024;
 
   dc.onopen = () => {
+    clearTimeout(openTimer);
     // Send metadata first
-    const meta = JSON.stringify({ name: file.name, size: file.size, type: file.type || 'application/octet-stream' });
-    dc.send(meta);
-    // Stream chunks
-    streamFile(dc, file);
+    dc.send(JSON.stringify({ v: 1, name: file.name, size: file.size, type: file.type || 'application/octet-stream' }));
+    // Stream chunks, then wait for the receiver's ack
+    streamFile(dc, file, () => {
+      updateProgress(100, t('transfer.waitingAck'));
+      // A receiver older than protocol v1 never acks: treat silence as done
+      ackTimer = setTimeout(() => finish(true), ACK_TIMEOUT_MS);
+    });
   };
-  dc.onerror = (e) => { toast(t('toast.sendError')); closeModal('transfer-modal'); };
+  dc.onmessage = (ev) => {
+    if (typeof ev.data !== 'string') return;
+    let msg;
+    try { msg = JSON.parse(ev.data); } catch { return; }
+    if (msg.__ack) finish(msg.ok === true, 'toast.sendFailed');
+  };
+  dc.onclose = () => finish(false);
+  dc.onerror = () => finish(false);
 
   const offer = await pc.createOffer();
   await pc.setLocalDescription(offer);
-  wsSend({ type: 'signal', to: targetId, data: { type: 'offer', sdp: offer.sdp } });
+  wsSend({ type: 'signal', to: targetId, data: { type: 'offer', sdp: offer.sdp, tid } });
 }
 
-function streamFile(dc, file) {
+function streamFile(dc, file, onDone) {
   let offset = 0;
   const total = file.size;
 
   function sendNext() {
+    if (dc.readyState !== 'open') return;
     if (offset >= total) {
       // Signal end
       dc.send(JSON.stringify({ __end: true }));
-      updateProgress(100, t('transfer.done'));
-      setTimeout(() => closeModal('transfer-modal'), 1200);
+      onDone();
       return;
     }
 
@@ -1432,40 +1505,82 @@ function streamFile(dc, file) {
 // ═══════════════════════════════════════════════════════════════
 //  FILE RECEIVE
 // ═══════════════════════════════════════════════════════════════
-function setupReceiveChannel(dc, fromId) {
+async function sha256Hex(blob) {
+  // Web Crypto only exists in secure contexts (HTTPS or localhost)
+  if (!crypto.subtle || blob.size > HASH_MAX_BYTES) return null;
+  const digest = await crypto.subtle.digest('SHA-256', await blob.arrayBuffer());
+  return Array.from(new Uint8Array(digest), x => x.toString(16).padStart(2, '0')).join('');
+}
+
+function setupReceiveChannel(dc, fromId, tid) {
   let meta = null;
   let buffers = [];
   let received = 0;
+  let done = false;
   const fromName = state.peers[fromId]?.name ?? fromId;
 
   dc.binaryType = 'arraybuffer';
 
+  async function finish(end) {
+    done = true;
+    const blob = new Blob(buffers, { type: meta.type });
+    buffers = [];
+    let ok = received === meta.size;
+    let error = ok ? undefined : 'SIZE_MISMATCH';
+    let hash = null;
+    if (ok) {
+      try { hash = await sha256Hex(blob); } catch {}
+      if (hash && typeof end.sha256 === 'string' && end.sha256.toLowerCase() !== hash) {
+        ok = false;
+        error = 'HASH_MISMATCH';
+      }
+    }
+    const ack = { __ack: true, ok, received };
+    if (hash) ack.sha256 = hash;
+    if (error) ack.error = error;
+    try { dc.send(JSON.stringify(ack)); } catch {}
+
+    closeModal('transfer-modal');
+    if (ok) {
+      addReceivedFile({ name: meta.name, size: meta.size, blob, url: URL.createObjectURL(blob) });
+      toast(t('toast.received', { name: fromName }));
+    } else {
+      toast(t('toast.receiveError'));
+    }
+    // The sender closes the connection when it gets the ack; this is a fallback
+    setTimeout(() => endTransfer(tid), 10000);
+  }
+
   dc.onmessage = (ev) => {
+    if (done) return;
     if (typeof ev.data === 'string') {
-      const parsed = JSON.parse(ev.data);
+      let parsed;
+      try { parsed = JSON.parse(ev.data); } catch { return; }
       if (parsed.__end) {
-        // Assemble file
-        const blob = new Blob(buffers, { type: meta.type });
-        const url  = URL.createObjectURL(blob);
-        closeModal('transfer-modal');
-        addReceivedFile({ name: meta.name, size: meta.size, blob, url });
-        toast(t('toast.received', { name: fromName }));
+        if (meta) finish(parsed);
         return;
       }
       // Metadata frame
-      meta = parsed;
+      if (meta || typeof parsed.name !== 'string' || !Number.isSafeInteger(parsed.size) || parsed.size < 0) return;
+      meta = { name: parsed.name, size: parsed.size, type: typeof parsed.type === 'string' ? parsed.type : 'application/octet-stream' };
       openTransferModal('transfer.receiving', meta.name);
-    } else {
+    } else if (meta) {
       // Binary chunk
       buffers.push(ev.data);
       received += ev.data.byteLength;
-      if (meta) {
-        const pct = Math.round((received / meta.size) * 100);
-        updateProgress(pct, `${pct}% — ${fmtBytes(received)} / ${fmtBytes(meta.size)}`);
-      }
+      const pct = meta.size ? Math.min(100, Math.round((received / meta.size) * 100)) : 100;
+      updateProgress(pct, `${pct}% — ${fmtBytes(received)} / ${fmtBytes(meta.size)}`);
     }
   };
-  dc.onerror = () => toast(t('toast.receiveError'));
+  dc.onclose = () => {
+    if (meta && !done) {
+      done = true;
+      buffers = [];
+      closeModal('transfer-modal');
+      toast(t('toast.receiveError'));
+    }
+  };
+  dc.onerror = () => { if (!done) toast(t('toast.receiveError')); };
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -2074,10 +2189,7 @@ document.getElementById('send-btn').addEventListener('click', () => {
 document.getElementById('send-cancel-btn').addEventListener('click', () => closeModal('send-modal'));
 document.getElementById('transfer-cancel-btn').addEventListener('click', () => {
   closeModal('transfer-modal');
-  if (sendTarget && peerConns[sendTarget]) {
-    peerConns[sendTarget].close();
-    delete peerConns[sendTarget];
-  }
+  if (currentSendTid) endTransfer(currentSendTid);
 });
 
 // Footer links → Terms / Privacy / About
