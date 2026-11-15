@@ -55,13 +55,16 @@ func runInit(e *env, args []string) error {
 	case err != nil:
 		return err
 	default:
-		if *name != "" {
-			id.Name = *name
-		}
-		if srv != "" {
-			id.Server = srv
-		}
-		if err := id.Save(e.dir); err != nil {
+		id, err = identity.Update(e.dir, func(id *identity.Identity) error {
+			if *name != "" {
+				id.Name = *name
+			}
+			if srv != "" {
+				id.Server = srv
+			}
+			return nil
+		})
+		if err != nil {
 			return err
 		}
 		fmt.Fprintln(e.out, t("init.updated"))
@@ -99,28 +102,6 @@ func printID(e *env, id *identity.Identity) {
 	}
 }
 
-func runPeers(e *env, args []string) error {
-	fs := newFlags("peers")
-	if err := parse(fs, args); err != nil {
-		return err
-	}
-	if fs.NArg() > 0 {
-		return &errUsage{cmd: "peers", msg: t("err.args")}
-	}
-	id, err := loadIdentity(e)
-	if err != nil {
-		return err
-	}
-	if len(id.Pairs) == 0 {
-		fmt.Fprintln(e.out, t("peers.none"))
-		return nil
-	}
-	for _, p := range id.Pairs {
-		fmt.Fprintf(e.out, "%s  %s\n", p.ID, p.Name)
-	}
-	return nil
-}
-
 func runAllow(e *env, args []string) error {
 	fs := newFlags("allow")
 	if err := parse(fs, args); err != nil {
@@ -133,21 +114,23 @@ func runAllow(e *env, args []string) error {
 	if !identity.IsDeviceID(code) {
 		return fmt.Errorf(t("err.badCode"), fs.Arg(0))
 	}
-	id, err := loadIdentity(e)
-	if err != nil {
+	if _, err := loadIdentity(e); err != nil {
 		return err
 	}
-	for _, a := range id.Allow {
-		if a == code {
-			fmt.Fprintln(e.out, fmt.Sprintf(t("allow.exists"), code))
-			return nil
+	exists := false
+	if _, err := identity.Update(e.dir, func(id *identity.Identity) error {
+		if exists = id.Allowed(code); !exists {
+			id.Allow = append(id.Allow, code)
 		}
-	}
-	id.Allow = append(id.Allow, code)
-	if err := id.Save(e.dir); err != nil {
+		return nil
+	}); err != nil {
 		return err
 	}
-	fmt.Fprintln(e.out, fmt.Sprintf(t("allow.added"), code))
+	if exists {
+		fmt.Fprintln(e.out, fmt.Sprintf(t("allow.exists"), code))
+	} else {
+		fmt.Fprintln(e.out, fmt.Sprintf(t("allow.added"), code))
+	}
 	return nil
 }
 

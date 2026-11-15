@@ -45,7 +45,10 @@ release: package       ## + tar.gz per arch and SHA256SUMS in dist/release (what
 	@cd dist/release && sha256sum * > SHA256SUMS && cat SHA256SUMS
 
 # Same targets without a local Go install, using the official Go image.
-DOCKER_GO = docker run --rm -u $$(id -u):$$(id -g) -e HOME=/tmp -e GOCACHE=/tmp/gocache -e GOPATH=/tmp/go \
+# Module and build caches live in .cache/ so repeated runs don't download again.
+DOCKER_GO = docker run --rm -u $$(id -u):$$(id -g) -e HOME=/tmp \
+	-e GOCACHE=/src/fileswap-cli/.cache/build -e GOMODCACHE=/src/fileswap-cli/.cache/mod -e GOPATH=/tmp/go \
+	-e FILESWAP_TEST_SERVER --network host \
 	-v "$(CURDIR)/..":/src -w /src/fileswap-cli $(GO_IMAGE)
 
 docker-build:         ## make build, inside Docker

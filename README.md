@@ -174,7 +174,8 @@ Integration tests (`node:test`) spawn the real server and exercise registration,
 
 ```bash
 fileswap init --name srv-01 --server 192.168.1.10:7341
-fileswap id                              # code + pairing link for the browser
+fileswap listen -d                       # online in the background, no open ports
+fileswap sync <browser-code>             # pair; accept it in the browser
 fileswap tfr laptop ./backup.tar.gz      # (coming) send to a paired device
 ```
 

@@ -25,7 +25,15 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: fileswap-cli/go.mod
-          cache-dependency-path: fileswap-cli/go.mod
+          cache-dependency-path: fileswap-cli/go.sum
+      # The node package's integration tests run against the real signaling server
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: fileswap/server/package-lock.json
+      - run: npm ci
+        working-directory: fileswap/server
       - name: gofmt
         run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
       - run: make test
@@ -41,7 +49,7 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: fileswap-cli/go.mod
-          cache-dependency-path: fileswap-cli/go.mod
+          cache-dependency-path: fileswap-cli/go.sum
       - name: Version
         run: |
           # Packages need a version that starts with a digit: without a v* tag, use v0.0.0-<commit>
