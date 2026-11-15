@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"bufio"
 	"context"
 	"errors"
 	"fmt"
@@ -11,7 +10,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
-	"sync"
 	"syscall"
 	"time"
 
@@ -434,39 +432,6 @@ func bold(e *env, s string) string {
 func isTerminal(f *os.File) bool {
 	st, err := f.Stat()
 	return err == nil && st.Mode()&os.ModeCharDevice != 0
-}
-
-// prompter asks y/N questions on the terminal, one at a time.
-type prompter struct {
-	e     *env
-	mu    sync.Mutex
-	lines chan string
-}
-
-func newPrompter(e *env) *prompter {
-	p := &prompter{e: e, lines: make(chan string)}
-	go func() {
-		sc := bufio.NewScanner(os.Stdin)
-		for sc.Scan() {
-			p.lines <- sc.Text()
-		}
-		close(p.lines)
-	}()
-	return p
-}
-
-func (p *prompter) decide(ctx context.Context, code, name string) bool {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	fmt.Fprint(p.e.out, fmt.Sprintf(t("prompt.ask"), name, code))
-	select {
-	case line, ok := <-p.lines:
-		answer := strings.ToLower(strings.TrimSpace(line))
-		return ok && (answer == "y" || answer == "yes" || answer == "s" || answer == "si" || answer == "sí")
-	case <-ctx.Done():
-		fmt.Fprintln(p.e.out)
-		return false
-	}
 }
 
 // reasonMsg translates a transfer failure reason from the node package

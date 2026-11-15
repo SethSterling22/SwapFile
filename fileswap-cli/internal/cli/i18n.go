@@ -174,12 +174,13 @@ Stop it with Ctrl+C, or with ` + "`fileswap stop`" + ` from another terminal.
 
 		"listen.banner":     "%s going online at %s.",
 		"listen.code":       "Device code (type it in the web app to pair):",
-		"listen.hint":       "No port is opened. Stop with Ctrl+C or `fileswap stop`.",
+		"listen.hint":       "No port is opened. Stop with Ctrl+C or `fileswap stop`; `fileswap listen -d` keeps it running in the background.",
 		"listen.hintDaemon": "No port is opened. Stop with `fileswap stop`. Pairing requests not in the allow list are rejected.",
 		"listen.stopped":    "Offline.",
 		"listen.bg":         "%s is online in the background (PID %d). Log: %s\nCheck it with `fileswap status`; stop it with `fileswap stop`.",
 		"listen.bgFailed":   "listen did not start in the background (log: %s):\n%s",
 		"prompt.ask":        "  Pair with %s (%s)? [y/N] ",
+		"prompt.background": "listen is in the background, so it cannot ask: bring it back with `fg`, or run `fileswap allow <code>` and retry.",
 
 		"log.online":           "Online at %s — waiting for files and pairing requests",
 		"log.offline":          "Disconnected (%s); reconnecting…",
@@ -371,12 +372,13 @@ Se detiene con Ctrl+C, o con ` + "`fileswap stop`" + ` desde otra terminal.
 
 		"listen.banner":     "%s conectándose a %s.",
 		"listen.code":       "Código del dispositivo (escríbelo en la app web para vincular):",
-		"listen.hint":       "No se abre ningún puerto. Detén con Ctrl+C o `fileswap stop`.",
+		"listen.hint":       "No se abre ningún puerto. Detén con Ctrl+C o `fileswap stop`; `fileswap listen -d` lo deja corriendo en segundo plano.",
 		"listen.hintDaemon": "No se abre ningún puerto. Detén con `fileswap stop`. Las solicitudes fuera de la lista de permitidos se rechazan.",
 		"listen.stopped":    "Desconectado.",
 		"listen.bg":         "%s está en línea en segundo plano (PID %d). Registro: %s\nRevísalo con `fileswap status`; detenlo con `fileswap stop`.",
 		"listen.bgFailed":   "listen no arrancó en segundo plano (registro: %s):\n%s",
 		"prompt.ask":        "  ¿Vincular con %s (%s)? [s/N] ",
+		"prompt.background": "listen está en segundo plano y no puede preguntar: tráelo con `fg`, o ejecuta `fileswap allow <código>` y vuelve a intentarlo.",
 
 		"log.online":           "En línea en %s; esperando archivos y solicitudes de vinculación",
 		"log.offline":          "Desconectado (%s); reconectando…",
