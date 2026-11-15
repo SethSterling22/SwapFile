@@ -943,6 +943,7 @@ const I18N = {
     'common.cancel':      'Cancelar',
     'common.close':       'Cerrar',
     'transfer.sending':   'Enviando…',
+    'transfer.connecting':'Conectando…',
     'transfer.receiving': 'Recibiendo…',
     'transfer.done':      'Completado',
     'transfer.waitingAck':'Esperando confirmación…',
@@ -953,6 +954,14 @@ const I18N = {
     'toast.rejected':     '❌ Solicitud rechazada',
     'toast.sendError':    '⚠️ Error en la transferencia',
     'toast.sendFailed':   '⚠️ El otro dispositivo no recibió el archivo completo',
+    'toast.cancelled':    '✋ Transferencia cancelada',
+    'toast.peerCancelled':'✋ El otro dispositivo canceló la transferencia',
+    'toast.peerBusy':     '⚠️ El otro dispositivo está ocupado con otras transferencias; inténtalo en un momento',
+    'toast.peerNotReceiving': '⚠️ Ese nodo no está recibiendo archivos: ejecuta fileswap listen allí',
+    'toast.connLost':     '⚠️ Se perdió la conexión con el otro dispositivo',
+    'toast.connectTimeout':'⚠️ No se pudo conectar con el otro dispositivo (¿un firewall bloquea WebRTC?)',
+    'toast.stalled':      '⚠️ La transferencia dejó de avanzar y se canceló',
+    'toast.noSpace':      '⚠️ No hay espacio suficiente en el otro dispositivo',
     'toast.received':     '✅ Archivo recibido de {name}',
     'toast.receiveError': '⚠️ Error al recibir el archivo',
     'toast.unlinked':     '🗑 {name} desvinculado',
@@ -1050,6 +1059,7 @@ const I18N = {
     'common.cancel':      'Cancel',
     'common.close':       'Close',
     'transfer.sending':   'Sending…',
+    'transfer.connecting':'Connecting…',
     'transfer.receiving': 'Receiving…',
     'transfer.done':      'Done',
     'transfer.waitingAck':'Waiting for confirmation…',
@@ -1060,6 +1070,14 @@ const I18N = {
     'toast.rejected':     '❌ Request rejected',
     'toast.sendError':    '⚠️ Transfer error',
     'toast.sendFailed':   '⚠️ The other device did not receive the whole file',
+    'toast.cancelled':    '✋ Transfer cancelled',
+    'toast.peerCancelled':'✋ The other device cancelled the transfer',
+    'toast.peerBusy':     '⚠️ The other device is busy with other transfers; try again in a moment',
+    'toast.peerNotReceiving': '⚠️ That node is not receiving files: run fileswap listen there',
+    'toast.connLost':     '⚠️ The connection with the other device was lost',
+    'toast.connectTimeout':'⚠️ Could not connect to the other device (is a firewall blocking WebRTC?)',
+    'toast.stalled':      '⚠️ The transfer stopped making progress and was cancelled',
+    'toast.noSpace':      '⚠️ Not enough space on the other device',
     'toast.received':     '✅ File received from {name}',
     'toast.receiveError': '⚠️ Error receiving the file',
     'toast.unlinked':     '🗑 {name} unlinked',
@@ -1263,6 +1281,7 @@ function handleServerMsg(msg) {
       state.peers[deviceId].online = online;
       renderPeers();
       toast(t(online ? 'toast.peerOnline' : 'toast.peerOffline', { name }));
+      if (!online) failConnectingTransfers(deviceId);
       break;
     }
 
@@ -1328,11 +1347,15 @@ function removePair(id) {
 // (tid) carried in each signal (docs/protocol.md). Connections are never
 // reused, so A→B followed by B→A works, and so does a CLI that exits between
 // transfers.
-const transfers = new Map(); // tid → { pc, peerId, candidates, remoteSet }
+const transfers = new Map(); // tid → { pc, peerId, candidates, remoteSet, open, fail, dropTimer }
 const MAX_QUEUED_CANDIDATES = 64;
 const ACK_TIMEOUT_MS = 60000;
 const CONNECT_TIMEOUT_MS = 30000;
+const STALL_MS = 30000;   // no progress for this long → the transfer failed
+const GONE_STALL_MS = 5000; // the same once the server says the other device went offline
+const DROP_MS = 10000;    // 'disconnected' for this long → the connection is lost
 const HASH_MAX_BYTES = 512 * 1024 * 1024; // larger files are only checked by size
+let activeTid = null;     // the transfer shown in the progress modal
 
 function newTid() {
   const b = new Uint8Array(16);
@@ -1342,7 +1365,7 @@ function newTid() {
 
 function createTransfer(tid, peerId) {
   const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
-  const tr = { pc, peerId, candidates: [], remoteSet: false };
+  const tr = { pc, peerId, candidates: [], remoteSet: false, open: false, fail: null, dropTimer: null, peerGone: false };
   transfers.set(tid, tr);
 
   pc.onicecandidate = (ev) => {
@@ -1351,7 +1374,15 @@ function createTransfer(tid, peerId) {
     }
   };
   pc.onconnectionstatechange = () => {
-    if (['failed', 'closed'].includes(pc.connectionState)) endTransfer(tid);
+    const s = pc.connectionState;
+    if (s === 'failed' || s === 'closed') {
+      failTransfer(tid, 'toast.connLost');
+    } else if (s === 'disconnected') {
+      clearTimeout(tr.dropTimer);
+      tr.dropTimer = setTimeout(() => failTransfer(tid, 'toast.connLost'), DROP_MS);
+    } else if (s === 'connected') {
+      clearTimeout(tr.dropTimer);
+    }
   };
   pc.ondatachannel = (ev) => setupReceiveChannel(ev.channel, peerId, tid);
   return tr;
@@ -1361,8 +1392,43 @@ function endTransfer(tid) {
   const tr = transfers.get(tid);
   if (!tr) return;
   transfers.delete(tid);
+  clearTimeout(tr.dropTimer);
   try { tr.pc.close(); } catch {}
 }
+
+// Ends a transfer that went wrong: tells the UI (tr.fail shows the toast),
+// optionally tells the other side with an abort signal, and closes it.
+function failTransfer(tid, toastKey, { notify = false, reason = 'ERROR' } = {}) {
+  const tr = transfers.get(tid);
+  if (!tr) return;
+  // An offline device can't be told (the server would answer DEVICE_OFFLINE)
+  if (notify && state.peers[tr.peerId]?.online !== false) {
+    wsSend({ type: 'signal', to: tr.peerId, data: { type: 'abort', tid, reason } });
+  }
+  const fail = tr.fail;
+  tr.fail = null;
+  if (fail) fail(toastKey);
+  endTransfer(tid);
+}
+
+const ABORT_TOASTS = {
+  CANCELLED:     'toast.peerCancelled',
+  BUSY:          'toast.peerBusy',
+  NOT_RECEIVING: 'toast.peerNotReceiving',
+};
+
+// A paired device went offline: transfers still connecting can't finish
+// without signaling. Connected ones may continue peer to peer (only the
+// signaling dropped), so they just get a much shorter stall timeout.
+function failConnectingTransfers(peerId) {
+  for (const [tid, tr] of transfers) {
+    if (tr.peerId !== peerId) continue;
+    if (!tr.open) failTransfer(tid, 'toast.connLost');
+    else tr.peerGone = true;
+  }
+}
+
+const stallLimit = (tr) => (tr?.peerGone ? GONE_STALL_MS : STALL_MS);
 
 // Candidates can arrive while setRemoteDescription is still pending; they are
 // queued and added once the remote description is set.
@@ -1401,36 +1467,46 @@ async function handleSignal(fromId, data) {
       } else if (tr.candidates.length < MAX_QUEUED_CANDIDATES) {
         tr.candidates.push(data.candidate);
       }
+    } else if (data.type === 'abort') {
+      if (tr) failTransfer(tid, ABORT_TOASTS[data.reason] || 'toast.peerCancelled');
     }
   } catch (err) {
     console.warn('signal', data.type, err);
-    endTransfer(tid);
+    failTransfer(tid, 'toast.sendError', { notify: true });
   }
 }
 
 // ═══════════════════════════════════════════════════════════════
 //  FILE SEND
 // ═══════════════════════════════════════════════════════════════
-let currentSendTid = null;
-
 async function sendFile(targetId, file) {
   const tid = newTid();
-  const { pc } = createTransfer(tid, targetId);
+  const tr = createTransfer(tid, targetId);
+  const { pc } = tr;
   const dc = pc.createDataChannel('fileswap-file', { ordered: true });
   dc.binaryType = 'arraybuffer';
-  currentSendTid = tid;
+  activeTid = tid;
 
-  openTransferModal('transfer.sending', file.name);
+  openTransferModal('transfer.connecting', file.name);
 
   let finished = false;
   let ackTimer = null;
-  const openTimer = setTimeout(() => finish(false), CONNECT_TIMEOUT_MS);
+  let lastProgress = Date.now();
+  let streaming = false;
+  const openTimer = setTimeout(() => failTransfer(tid, 'toast.connectTimeout', { notify: true }), CONNECT_TIMEOUT_MS);
+  const watchdog = setInterval(() => {
+    if (streaming && Date.now() - lastProgress > stallLimit(tr)) {
+      failTransfer(tid, tr.peerGone ? 'toast.connLost' : 'toast.stalled', { notify: true });
+    }
+  }, 1000);
   const finish = (ok, errKey = 'toast.sendError') => {
     if (finished) return;
     finished = true;
+    streaming = false;
     clearTimeout(openTimer);
     clearTimeout(ackTimer);
-    if (currentSendTid === tid) currentSendTid = null;
+    clearInterval(watchdog);
+    if (activeTid === tid) activeTid = null;
     if (ok) {
       updateProgress(100, t('transfer.done'));
       setTimeout(() => closeModal('transfer-modal'), 1200);
@@ -1440,15 +1516,21 @@ async function sendFile(targetId, file) {
     }
     endTransfer(tid);
   };
+  tr.fail = (key) => finish(false, key);
 
   dc.bufferedAmountLowThreshold = 64 * 1024;
 
   dc.onopen = () => {
     clearTimeout(openTimer);
+    tr.open = true;
+    streaming = true;
+    lastProgress = Date.now();
+    setTransferTitle('transfer.sending');
     // Send metadata first
     dc.send(JSON.stringify({ v: 1, name: file.name, size: file.size, type: file.type || 'application/octet-stream' }));
     // Stream chunks, then wait for the receiver's ack
-    streamFile(dc, file, () => {
+    streamFile(dc, file, () => { lastProgress = Date.now(); }, () => {
+      streaming = false;
       updateProgress(100, t('transfer.waitingAck'));
       // A receiver older than protocol v1 never acks: treat silence as done
       ackTimer = setTimeout(() => finish(true), ACK_TIMEOUT_MS);
@@ -1458,9 +1540,9 @@ async function sendFile(targetId, file) {
     if (typeof ev.data !== 'string') return;
     let msg;
     try { msg = JSON.parse(ev.data); } catch { return; }
-    if (msg.__ack) finish(msg.ok === true, 'toast.sendFailed');
+    if (msg.__ack) finish(msg.ok === true, msg.error === 'NO_SPACE' ? 'toast.noSpace' : 'toast.sendFailed');
   };
-  dc.onclose = () => finish(false);
+  dc.onclose = () => finish(false, tr.open ? 'toast.connLost' : 'toast.sendError');
   dc.onerror = () => finish(false);
 
   const offer = await pc.createOffer();
@@ -1468,7 +1550,7 @@ async function sendFile(targetId, file) {
   wsSend({ type: 'signal', to: targetId, data: { type: 'offer', sdp: offer.sdp, tid } });
 }
 
-function streamFile(dc, file, onDone) {
+function streamFile(dc, file, onProgress, onDone) {
   let offset = 0;
   const total = file.size;
 
@@ -1493,6 +1575,7 @@ function streamFile(dc, file, onDone) {
       if (dc.readyState !== 'open') return;
       dc.send(e.target.result);
       offset += e.target.result.byteLength;
+      onProgress();
       const pct = Math.round((offset / total) * 100);
       updateProgress(pct, `${pct}% — ${fmtBytes(offset)} / ${fmtBytes(total)}`);
       sendNext();
@@ -1517,12 +1600,35 @@ function setupReceiveChannel(dc, fromId, tid) {
   let buffers = [];
   let received = 0;
   let done = false;
+  let lastData = Date.now();
   const fromName = state.peers[fromId]?.name ?? fromId;
+  const tr = transfers.get(tid);
+  if (tr) tr.open = true;
 
   dc.binaryType = 'arraybuffer';
 
+  const watchdog = setInterval(() => {
+    if (meta && !done && Date.now() - lastData > stallLimit(tr)) {
+      failTransfer(tid, tr?.peerGone ? 'toast.connLost' : 'toast.stalled', { notify: true });
+    }
+  }, 1000);
+  const fail = (key) => {
+    if (done) return;
+    done = true;
+    buffers = [];
+    clearInterval(watchdog);
+    if (activeTid === tid) activeTid = null;
+    if (meta) {
+      closeModal('transfer-modal');
+      toast(t(key));
+    }
+  };
+  if (tr) tr.fail = fail;
+
   async function finish(end) {
     done = true;
+    clearInterval(watchdog);
+    if (activeTid === tid) activeTid = null;
     const blob = new Blob(buffers, { type: meta.type });
     buffers = [];
     let ok = received === meta.size;
@@ -1553,6 +1659,7 @@ function setupReceiveChannel(dc, fromId, tid) {
 
   dc.onmessage = (ev) => {
     if (done) return;
+    lastData = Date.now();
     if (typeof ev.data === 'string') {
       let parsed;
       try { parsed = JSON.parse(ev.data); } catch { return; }
@@ -1563,6 +1670,7 @@ function setupReceiveChannel(dc, fromId, tid) {
       // Metadata frame
       if (meta || typeof parsed.name !== 'string' || !Number.isSafeInteger(parsed.size) || parsed.size < 0) return;
       meta = { name: parsed.name, size: parsed.size, type: typeof parsed.type === 'string' ? parsed.type : 'application/octet-stream' };
+      activeTid = tid;
       openTransferModal('transfer.receiving', meta.name);
     } else if (meta) {
       // Binary chunk
@@ -1572,15 +1680,8 @@ function setupReceiveChannel(dc, fromId, tid) {
       updateProgress(pct, `${pct}% — ${fmtBytes(received)} / ${fmtBytes(meta.size)}`);
     }
   };
-  dc.onclose = () => {
-    if (meta && !done) {
-      done = true;
-      buffers = [];
-      closeModal('transfer-modal');
-      toast(t('toast.receiveError'));
-    }
-  };
-  dc.onerror = () => { if (!done) toast(t('toast.receiveError')); };
+  dc.onclose = () => fail('toast.connLost');
+  dc.onerror = () => fail('toast.receiveError');
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -1765,11 +1866,16 @@ function openSendModal(targetId, targetName) {
 // ─── Transfer Modal ───────────────────────────────────────────────────────
 let transferTitleKey = 'transfer.sending';
 function openTransferModal(titleKey, filename) {
-  transferTitleKey = titleKey;
-  document.getElementById('transfer-title').textContent    = t(titleKey);
+  setTransferTitle(titleKey);
   document.getElementById('transfer-filename').textContent = filename;
+  document.getElementById('transfer-cancel-btn').style.display = '';
   updateProgress(0, '0%');
   openModal('transfer-modal');
+}
+
+function setTransferTitle(titleKey) {
+  transferTitleKey = titleKey;
+  document.getElementById('transfer-title').textContent = t(titleKey);
 }
 
 function updateProgress(pct, label) {
@@ -2188,8 +2294,8 @@ document.getElementById('send-btn').addEventListener('click', () => {
 
 document.getElementById('send-cancel-btn').addEventListener('click', () => closeModal('send-modal'));
 document.getElementById('transfer-cancel-btn').addEventListener('click', () => {
+  if (activeTid) failTransfer(activeTid, 'toast.cancelled', { notify: true, reason: 'CANCELLED' });
   closeModal('transfer-modal');
-  if (currentSendTid) endTransfer(currentSendTid);
 });
 
 // Footer links → Terms / Privacy / About
