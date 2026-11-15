@@ -37,6 +37,20 @@ func TestSafeNameLength(t *testing.T) {
 	}
 }
 
+func TestCreateUniqueCompoundExt(t *testing.T) {
+	dir := t.TempDir()
+	for _, want := range []string{"b.tar.gz", "b (1).tar.gz"} {
+		f, err := CreateUnique(dir, "b.tar.gz")
+		if err != nil {
+			t.Fatal(err)
+		}
+		f.Close()
+		if got := filepath.Base(f.Name()); got != want {
+			t.Fatalf("got %s, want %s", got, want)
+		}
+	}
+}
+
 func TestCreateUnique(t *testing.T) {
 	dir := t.TempDir()
 	var names []string

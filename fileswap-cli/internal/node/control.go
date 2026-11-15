@@ -17,12 +17,20 @@ import (
 // per identity and would disconnect `listen`). It is a Unix socket in a
 // directory only this user can open; nothing is reachable from the network.
 //
-// Protocol: one JSON request line, one JSON response line.
+// Protocol: one JSON request line, then JSON response lines: zero or more
+// progress lines (for "send") and a final line without Progress.
 
 // Request is a control command.
 type Request struct {
-	Cmd string `json:"cmd"` // status | sync | unpair | stop
-	Arg string `json:"arg,omitempty"`
+	Cmd  string `json:"cmd"` // status | sync | unpair | send | stop
+	Arg  string `json:"arg,omitempty"`
+	Path string `json:"path,omitempty"` // send: absolute file path
+}
+
+// Progress is a "send" progress line.
+type Progress struct {
+	Done  int64 `json:"done"`
+	Total int64 `json:"total"`
 }
 
 // Response answers a Request. Error and Detail carry an Error's code.
@@ -33,6 +41,9 @@ type Response struct {
 	Status *Status `json:"status,omitempty"`
 	Name   string  `json:"name,omitempty"`
 	ID     string  `json:"id,omitempty"`
+
+	Progress *Progress   `json:"progress,omitempty"`
+	Sent     *SendResult `json:"sent,omitempty"`
 }
 
 // ErrNotRunning means no `listen` is running for this identity.
@@ -117,6 +128,12 @@ func (n *Node) serveConn(ctx context.Context, conn net.Conn, stop func()) {
 		return
 	}
 
+	write := func(r Response) error {
+		b, _ := json.Marshal(r)
+		_, err := conn.Write(append(b, '\n'))
+		return err
+	}
+
 	resp := Response{OK: true}
 	switch req.Cmd {
 	case "status":
@@ -132,13 +149,28 @@ func (n *Node) serveConn(ctx context.Context, conn net.Conn, stop func()) {
 		p, err := n.Unpair(ctx, req.Arg)
 		resp.Name, resp.ID = p.Name, p.ID
 		setErr(&resp, err)
+	case "send":
+		// The command stops waiting if its terminal is closed: cancel then.
+		sctx, cancel := context.WithCancel(ctx)
+		defer cancel()
+		var last time.Time
+		res, err := n.Send(sctx, req.Arg, req.Path, func(done, total int64) {
+			if time.Since(last) < 200*time.Millisecond && done != total {
+				return
+			}
+			last = time.Now()
+			if write(Response{OK: true, Progress: &Progress{Done: done, Total: total}}) != nil {
+				cancel()
+			}
+		})
+		resp.Sent = res
+		setErr(&resp, err)
 	case "stop":
 		defer stop()
 	default:
 		resp = Response{Error: "UNKNOWN_COMMAND", Detail: req.Cmd}
 	}
-	b, _ := json.Marshal(resp)
-	_, _ = conn.Write(append(b, '\n'))
+	_ = write(resp)
 }
 
 func setErr(r *Response, err error) {
@@ -157,9 +189,15 @@ func setErr(r *Response, err error) {
 // SyncTimeout bounds how long a pairing request waits for an answer.
 const SyncTimeout = 2 * time.Minute
 
-// Call sends one request to the listen owning the socket at path. It
-// returns ErrNotRunning when nothing is listening there.
+// Call sends one request to the listen owning the socket at path and
+// returns the final response. It returns ErrNotRunning when nothing is
+// listening there.
 func Call(ctx context.Context, path string, req Request) (*Response, error) {
+	return CallStream(ctx, path, req, nil)
+}
+
+// CallStream is Call, passing progress lines to onProgress.
+func CallStream(ctx context.Context, path string, req Request, onProgress func(Progress)) (*Response, error) {
 	var d net.Dialer
 	dctx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	conn, err := d.DialContext(dctx, "unix", path)
@@ -176,15 +214,24 @@ func Call(ctx context.Context, path string, req Request) (*Response, error) {
 	if _, err := conn.Write(append(b, '\n')); err != nil {
 		return nil, err
 	}
-	line, err := bufio.NewReader(conn).ReadBytes('\n')
-	if err != nil {
-		return nil, fmt.Errorf("control socket: %w", err)
+	rd := bufio.NewReader(conn)
+	for {
+		line, err := rd.ReadBytes('\n')
+		if err != nil {
+			return nil, fmt.Errorf("control socket: %w", err)
+		}
+		var resp Response
+		if err := json.Unmarshal(line, &resp); err != nil {
+			return nil, err
+		}
+		if resp.Progress != nil {
+			if onProgress != nil {
+				onProgress(*resp.Progress)
+			}
+			continue
+		}
+		return &resp, nil
 	}
-	var resp Response
-	if err := json.Unmarshal(line, &resp); err != nil {
-		return nil, err
-	}
-	return &resp, nil
 }
 
 // AsError turns a failed Response back into an *Error.

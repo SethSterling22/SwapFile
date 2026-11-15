@@ -176,10 +176,10 @@ Integration tests (`node:test`) spawn the real server and exercise registration,
 fileswap init --name srv-01 --server 192.168.1.10:7341
 fileswap listen -d                       # online in the background, no open ports
 fileswap sync <browser-code>             # pair; accept it in the browser
-fileswap tfr laptop ./backup.tar.gz      # (coming) send to a paired device
+fileswap tfr laptop ./backup.tar.gz      # send to a paired device; received files land in ~/FileSwap
 ```
 
-`.deb` (Debian/Ubuntu), Arch packages and plain binaries for `amd64`/`arm64` are published on [GitHub Releases](https://github.com/SethSterling22/SwapFile/releases). It is in early development; see its [roadmap](fileswap-cli/README.md#roadmap).
+`.deb` (Debian/Ubuntu), Arch packages and plain binaries for `amd64`/`arm64` are published on [GitHub Releases](https://github.com/SethSterling22/SwapFile/releases). It is in early development; see its [roadmap](fileswap-cli/README.md#roadmap). The web app's transfers can be cancelled from either side, and fail fast (with a reason) when the other device disconnects, stops making progress or has no space.
 
 ---
 

@@ -44,7 +44,7 @@ var commands = map[string]command{
 	"peers":   {runPeers},
 	"allow":   {runAllow},
 	"sync":    {runSync},
-	"tfr":     {notYet("tfr")},
+	"tfr":     {runTfr},
 	"listen":  {runListen},
 	"stop":    {runStop},
 	"status":  {runStatus},
@@ -150,8 +150,4 @@ func loadIdentity(e *env) (*identity.Identity, error) {
 		return nil, errors.New(t("err.notInit"))
 	}
 	return id, err
-}
-
-func notYet(name string) func(*env, []string) error {
-	return func(*env, []string) error { return fmt.Errorf(t("err.notYet"), name) }
 }

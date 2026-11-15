@@ -41,31 +41,33 @@ Usage:
   fileswap [--config <dir>] <command> [options]
 
 Commands:
-  init     --name <name> [--server <url>]   Create this node's identity
+  init     --name <name> [--server <url>] [--dir <path>]
+                                             Create this node's identity
   id                                         Show this node's name, code and pairing link
   sync     <code>                            Pair with a device (it must accept)    (alias: -sync)
   peers                                      List paired devices and who is online
   unpair   <node>                            Remove a paired device on both sides
   allow    <code>                            Let listen accept pairing from this device without asking
-  listen   [-d]                              Go online to receive pairing requests (-d: in the background)
+  listen   [-d] [--dir <path>]               Go online to receive files and pairing requests (-d: background)
   status                                     Show whether listen is running
   stop                                       Take a running listen offline
-  tfr      <node> <path>                     Send a file to a paired device         (alias: -tfr, send) *
+  tfr      <node> <path>                     Send a file to a paired device         (alias: -tfr, send)
   version                                    Print the version
   help     [command]                         Show this help, or a command's help    (alias: --help, -h)
 
 <node> is a device code, a unique prefix of it, or the device's name.
 <code> is the full device code (xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx).
 
+Received files go to the swap folder: --dir, else the one set with
+` + "`init --dir`" + `, else ~/FileSwap.
+
 fileswap never opens a port: it only connects out to the FileSwap server and,
 for transfers, straight to the other device.
 
 Options:
   --config <dir>   Config directory (default: $FILESWAP_CONFIG, else $XDG_CONFIG_HOME/fileswap, else ~/.config/fileswap)
-
-* Not available yet in this version.
 `,
-		"help.init": `Usage: fileswap init --name <name> [--server <url>] [--force]
+		"help.init": `Usage: fileswap init --name <name> [--server <url>] [--dir <path>] [--force]
 
 Creates this node's identity: a private secret stored in the config directory
 and the public device code derived from it. Running init again keeps the code
@@ -75,6 +77,7 @@ will have to pair again).
   --name     Device name shown to other devices (required the first time)
   --server   FileSwap server, e.g. ws://192.168.1.10:7341 or https://fileswap.example.com
              (default: ws://localhost:7341)
+  --dir      Swap folder where listen saves received files (default: ~/FileSwap)
   --force    Replace the identity with a new one
 `,
 		"help.id":    "Usage: fileswap id\n\nShows this node's name, device code, server and the link that pairs a browser with it.\n",
@@ -85,18 +88,28 @@ Sends a pairing request to the device with that code and waits (up to 2 min)
 until it is accepted there. The other device must be online: a browser with
 FileSwap open, or a node running ` + "`fileswap listen`" + `.
 `,
-		"help.tfr": "Usage: fileswap tfr <node> <path>\n\nSends a file to a paired device. The other device must be online.\n",
-		"help.listen": `Usage: fileswap listen [-d]
+		"help.tfr": `Usage: fileswap tfr <node> <path>
 
-Keeps this node online so browsers and other nodes can pair with it (and,
-in a coming version, send it files). No port is opened: the node only keeps
-an outgoing connection to the FileSwap server.
+Sends a file straight to a paired device (peer to peer, WebRTC) and waits
+until the other side confirms it received every byte (SHA-256 checked).
+The other device must be online: a browser with FileSwap open, or a node
+running ` + "`fileswap listen`" + `. Ctrl+C cancels the transfer on both sides.
+
+<node> is a device code, a unique prefix of it, or the device's name.
+`,
+		"help.listen": `Usage: fileswap listen [-d] [--dir <path>]
+
+Keeps this node online so paired browsers and nodes can send it files, and
+new ones can pair with it. Files are saved in the swap folder, never
+overwriting existing ones. No port is opened: the node only keeps an
+outgoing connection to the FileSwap server.
 
 Pairing requests from devices in the allow list (` + "`fileswap allow`" + `) or already
 paired are accepted automatically. Others are asked on the terminal, or
 rejected when running in the background.
 
   -d, --daemon   Run in the background; log to ~/.local/state/fileswap/listen.log
+  --dir <path>   Swap folder for this run (default: the one set with init --dir, else ~/FileSwap)
 
 Stop it with Ctrl+C, or with ` + "`fileswap stop`" + ` from another terminal.
 `,
@@ -113,7 +126,6 @@ Stop it with Ctrl+C, or with ` + "`fileswap stop`" + ` from another terminal.
 		"err.badCode":        "%q is not a valid device code (xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)",
 		"err.badServer":      "invalid server URL %q",
 		"err.args":           "wrong arguments",
-		"err.notYet":         "`%s` is not available yet in this version",
 
 		"nerr.OFFLINE":           "cannot reach the FileSwap server %s",
 		"nerr.TIMEOUT":           "no answer from the other device within 2 minutes",
@@ -168,7 +180,7 @@ Stop it with Ctrl+C, or with ` + "`fileswap stop`" + ` from another terminal.
 		"listen.bgFailed":   "listen did not start in the background (log: %s):\n%s",
 		"prompt.ask":        "  Pair with %s (%s)? [y/N] ",
 
-		"log.online":           "Online at %s",
+		"log.online":           "Online at %s — waiting for files and pairing requests",
 		"log.offline":          "Disconnected (%s); reconnecting…",
 		"log.connectFailed":    "Cannot reach %s (%s); retrying…",
 		"log.peerOnline":       "%s is online",
@@ -184,7 +196,38 @@ Stop it with Ctrl+C, or with ` + "`fileswap stop`" + ` from another terminal.
 		"log.unpaired":         "Unpaired %s",
 		"log.unpairedBy":       "%s removed the pairing",
 		"log.serverError":      "Server error %s: %s",
-		"log.noTransfers":      "%s tried to send a file; receiving files is not available yet in this version",
+
+		"id.dir":       "Folder:  %s",
+		"err.notDir":   "%s exists and is not a folder",
+		"tfr.done":     "Sent %s (%s) to %s — verified, SHA-256 %s…",
+		"listen.inbox": "Saving received files to %s",
+
+		"nerr.NOT_A_FILE":      "%s is not a regular file (folders are not supported yet)",
+		"nerr.PEER_ABORTED":    "the other device cancelled the transfer (%s)",
+		"nerr.CONNECTION_LOST": "the connection with the other device was lost",
+		"nerr.CONNECT_TIMEOUT": "could not connect directly with %s in 30 s (a firewall may be blocking WebRTC/UDP)",
+		"nerr.HASH_MISMATCH":   "the file arrived corrupted (SHA-256 mismatch); nothing was saved",
+		"nerr.SIZE_MISMATCH":   "the other device did not receive the whole file",
+		"nerr.WRITE_FAILED":    "the other device could not save the file",
+		"nerr.NO_SPACE":        "not enough disk space on the other device",
+		"nerr.STALLED":         "the transfer stopped making progress for 30 s",
+		"nerr.NO_ACK":          "the other device did not confirm the file within 60 s",
+		"nerr.CANCELLED":       "transfer cancelled",
+		"abort.CANCELLED":      "cancelled",
+		"abort.BUSY":           "too many transfers at once",
+		"abort.NOT_RECEIVING":  "it is not receiving files; run `fileswap listen` there",
+		"abort.ERROR":          "error",
+
+		"log.receiving":         "Receiving %s (%s) from %s…",
+		"log.received":          "Saved %s (%s) from %s — SHA-256 %s… verified",
+		"log.receiveFailed":     "Transfer from %s failed: %s",
+		"log.receiveFailedFile": "Could not receive %s from %s: %s",
+		"log.receiveBusy":       "Refused a transfer from %s: too many at once",
+		"log.connecting":        "Connecting to %s…",
+		"log.sending":           "Sending %s (%s) to %s…",
+		"log.sent":              "Sent %s (%s) to %s — SHA-256 %s… verified",
+		"log.sendFailed":        "Could not send %s to %s: %s",
+		"log.sendCancelled":     "Cancelled sending %s to %s",
 	},
 	"es": {
 		"usage": `fileswap — envía archivos entre navegadores y servidores Linux, de igual a igual
@@ -193,31 +236,33 @@ Uso:
   fileswap [--config <dir>] <comando> [opciones]
 
 Comandos:
-  init     --name <nombre> [--server <url>]  Crea la identidad de este nodo
+  init     --name <nombre> [--server <url>] [--dir <ruta>]
+                                             Crea la identidad de este nodo
   id                                         Muestra el nombre, el código y el enlace de vinculación
   sync     <código>                          Se vincula con un dispositivo (debe aceptar)       (alias: -sync)
   peers                                      Lista los dispositivos vinculados y quién está en línea
   unpair   <nodo>                            Desvincula un dispositivo en ambos lados
   allow    <código>                          listen aceptará la vinculación de ese dispositivo sin preguntar
-  listen   [-d]                              Se pone en línea para recibir solicitudes (-d: en segundo plano)
+  listen   [-d] [--dir <ruta>]               Se pone en línea para recibir archivos y solicitudes (-d: segundo plano)
   status                                     Indica si listen está corriendo
   stop                                       Desconecta un listen en marcha
-  tfr      <nodo> <ruta>                     Envía un archivo a un dispositivo vinculado        (alias: -tfr, send) *
+  tfr      <nodo> <ruta>                     Envía un archivo a un dispositivo vinculado        (alias: -tfr, send)
   version                                    Muestra la versión
   help     [comando]                         Muestra esta ayuda, o la de un comando             (alias: --help, -h)
 
 <nodo> es un código de dispositivo, un prefijo único de él, o el nombre del dispositivo.
 <código> es el código completo del dispositivo (xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx).
 
+Los archivos recibidos van a la carpeta de swap: --dir, si no la fijada con
+` + "`init --dir`" + `, si no ~/FileSwap.
+
 fileswap nunca abre puertos: solo se conecta hacia el servidor FileSwap y,
 para las transferencias, directamente al otro dispositivo.
 
 Opciones:
   --config <dir>   Directorio de configuración (por defecto: $FILESWAP_CONFIG, si no $XDG_CONFIG_HOME/fileswap, si no ~/.config/fileswap)
-
-* Todavía no disponible en esta versión.
 `,
-		"help.init": `Uso: fileswap init --name <nombre> [--server <url>] [--force]
+		"help.init": `Uso: fileswap init --name <nombre> [--server <url>] [--dir <ruta>] [--force]
 
 Crea la identidad de este nodo: un secreto privado guardado en el directorio de
 configuración y el código público que se deriva de él. Si vuelves a ejecutar
@@ -227,6 +272,7 @@ un código nuevo (los dispositivos vinculados tendrán que vincularse de nuevo).
   --name     Nombre que verán los otros dispositivos (obligatorio la primera vez)
   --server   Servidor FileSwap, p. ej. ws://192.168.1.10:7341 o https://fileswap.ejemplo.com
              (por defecto: ws://localhost:7341)
+  --dir      Carpeta de swap donde listen guarda lo recibido (por defecto: ~/FileSwap)
   --force    Reemplaza la identidad por una nueva
 `,
 		"help.id":    "Uso: fileswap id\n\nMuestra el nombre, el código del dispositivo, el servidor y el enlace para vincular un navegador.\n",
@@ -237,11 +283,21 @@ Envía una solicitud de vinculación al dispositivo con ese código y espera (ha
 2 min) a que la acepten allí. El otro dispositivo debe estar en línea: un
 navegador con FileSwap abierto, o un nodo con ` + "`fileswap listen`" + `.
 `,
-		"help.tfr": "Uso: fileswap tfr <nodo> <ruta>\n\nEnvía un archivo a un dispositivo vinculado. El otro dispositivo debe estar en línea.\n",
-		"help.listen": `Uso: fileswap listen [-d]
+		"help.tfr": `Uso: fileswap tfr <nodo> <ruta>
 
-Mantiene este nodo en línea para que navegadores y otros nodos puedan
-vincularse (y, en una próxima versión, enviarle archivos). No abre ningún
+Envía un archivo directamente a un dispositivo vinculado (de igual a igual,
+WebRTC) y espera a que el otro lado confirme que recibió todos los bytes
+(se comprueba el SHA-256). El otro dispositivo debe estar en línea: un
+navegador con FileSwap abierto, o un nodo con ` + "`fileswap listen`" + `.
+Ctrl+C cancela la transferencia en ambos lados.
+
+<nodo> es un código de dispositivo, un prefijo único de él, o el nombre del dispositivo.
+`,
+		"help.listen": `Uso: fileswap listen [-d] [--dir <ruta>]
+
+Mantiene este nodo en línea para que los navegadores y nodos vinculados le
+envíen archivos, y para que otros nuevos se vinculen. Los archivos se guardan
+en la carpeta de swap, sin sobrescribir los existentes. No abre ningún
 puerto: solo mantiene una conexión saliente con el servidor FileSwap.
 
 Las solicitudes de dispositivos en la lista de permitidos (` + "`fileswap allow`" + `) o ya
@@ -249,6 +305,7 @@ vinculados se aceptan solas. Las demás se preguntan en la terminal, o se
 rechazan si corre en segundo plano.
 
   -d, --daemon   Corre en segundo plano; registro en ~/.local/state/fileswap/listen.log
+  --dir <ruta>   Carpeta de swap para esta ejecución (por defecto: la fijada con init --dir, si no ~/FileSwap)
 
 Se detiene con Ctrl+C, o con ` + "`fileswap stop`" + ` desde otra terminal.
 `,
@@ -265,7 +322,6 @@ Se detiene con Ctrl+C, o con ` + "`fileswap stop`" + ` desde otra terminal.
 		"err.badCode":        "%q no es un código de dispositivo válido (xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)",
 		"err.badServer":      "URL de servidor no válida %q",
 		"err.args":           "argumentos incorrectos",
-		"err.notYet":         "`%s` todavía no está disponible en esta versión",
 
 		"nerr.OFFLINE":           "no se puede llegar al servidor FileSwap %s",
 		"nerr.TIMEOUT":           "el otro dispositivo no respondió en 2 minutos",
@@ -320,7 +376,7 @@ Se detiene con Ctrl+C, o con ` + "`fileswap stop`" + ` desde otra terminal.
 		"listen.bgFailed":   "listen no arrancó en segundo plano (registro: %s):\n%s",
 		"prompt.ask":        "  ¿Vincular con %s (%s)? [s/N] ",
 
-		"log.online":           "En línea en %s",
+		"log.online":           "En línea en %s; esperando archivos y solicitudes de vinculación",
 		"log.offline":          "Desconectado (%s); reconectando…",
 		"log.connectFailed":    "No se puede llegar a %s (%s); reintentando…",
 		"log.peerOnline":       "%s está en línea",
@@ -336,6 +392,37 @@ Se detiene con Ctrl+C, o con ` + "`fileswap stop`" + ` desde otra terminal.
 		"log.unpaired":         "%s desvinculado",
 		"log.unpairedBy":       "%s eliminó la vinculación",
 		"log.serverError":      "Error del servidor %s: %s",
-		"log.noTransfers":      "%s intentó enviar un archivo; recibir archivos todavía no está disponible en esta versión",
+
+		"id.dir":       "Carpeta:  %s",
+		"err.notDir":   "%s existe y no es una carpeta",
+		"tfr.done":     "%s (%s) enviado a %s; verificado, SHA-256 %s…",
+		"listen.inbox": "Los archivos recibidos se guardan en %s",
+
+		"nerr.NOT_A_FILE":      "%s no es un archivo normal (todavía no se pueden enviar carpetas)",
+		"nerr.PEER_ABORTED":    "el otro dispositivo canceló la transferencia (%s)",
+		"nerr.CONNECTION_LOST": "se perdió la conexión con el otro dispositivo",
+		"nerr.CONNECT_TIMEOUT": "no se pudo conectar directamente con %s en 30 s (un firewall puede estar bloqueando WebRTC/UDP)",
+		"nerr.HASH_MISMATCH":   "el archivo llegó dañado (el SHA-256 no coincide); no se guardó nada",
+		"nerr.SIZE_MISMATCH":   "el otro dispositivo no recibió el archivo completo",
+		"nerr.WRITE_FAILED":    "el otro dispositivo no pudo guardar el archivo",
+		"nerr.NO_SPACE":        "no hay espacio suficiente en el disco del otro dispositivo",
+		"nerr.STALLED":         "la transferencia dejó de avanzar durante 30 s",
+		"nerr.NO_ACK":          "el otro dispositivo no confirmó el archivo en 60 s",
+		"nerr.CANCELLED":       "transferencia cancelada",
+		"abort.CANCELLED":      "cancelada",
+		"abort.BUSY":           "demasiadas transferencias a la vez",
+		"abort.NOT_RECEIVING":  "no está recibiendo archivos; ejecuta `fileswap listen` allí",
+		"abort.ERROR":          "error",
+
+		"log.receiving":         "Recibiendo %s (%s) de %s…",
+		"log.received":          "Guardado %s (%s) de %s; SHA-256 %s… verificado",
+		"log.receiveFailed":     "Falló la transferencia de %s: %s",
+		"log.receiveFailedFile": "No se pudo recibir %s de %s: %s",
+		"log.receiveBusy":       "Transferencia de %s rechazada: demasiadas a la vez",
+		"log.connecting":        "Conectando con %s…",
+		"log.sending":           "Enviando %s (%s) a %s…",
+		"log.sent":              "%s (%s) enviado a %s; SHA-256 %s… verificado",
+		"log.sendFailed":        "No se pudo enviar %s a %s: %s",
+		"log.sendCancelled":     "Envío de %s a %s cancelado",
 	},
 }

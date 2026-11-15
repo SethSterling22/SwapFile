@@ -54,6 +54,9 @@ func errf(code, detail string) error { return &Error{Code: code, Detail: detail}
 type Options struct {
 	Dir     string // config directory holding identity.json
 	Version string
+	// InboxDir receives incoming files. Empty refuses incoming transfers
+	// (one-shot commands), so only `listen` receives.
+	InboxDir string
 	// HandleRequests answers incoming pairing requests. One-shot commands
 	// leave it off so they never reject a request meant for `listen`.
 	HandleRequests bool
@@ -89,13 +92,13 @@ type Node struct {
 	client *signaling.Client
 	since  time.Time
 
-	mu       sync.Mutex
-	id       *identity.Identity // last loaded copy; changes go through identity.Update
-	online   bool
-	presence map[string]bool
-	onlineCh chan struct{} // closed while online
-	pending  *pendingSync
-	warned   bool // already logged that transfers are not supported
+	mu        sync.Mutex
+	id        *identity.Identity // last loaded copy; changes go through identity.Update
+	online    bool
+	presence  map[string]bool
+	onlineCh  chan struct{} // closed while online
+	pending   *pendingSync
+	transfers map[string]*xfer // by transfer id
 
 	syncMu sync.Mutex // one outgoing pairing request at a time
 }
@@ -119,7 +122,7 @@ func New(opts Options) (*Node, error) {
 	if opts.Log == nil {
 		opts.Log = func(string, ...any) {}
 	}
-	n := &Node{opts: opts, id: id, presence: map[string]bool{}, onlineCh: make(chan struct{}), since: time.Now()}
+	n := &Node{opts: opts, id: id, presence: map[string]bool{}, transfers: map[string]*xfer{}, onlineCh: make(chan struct{}), since: time.Now()}
 	n.client = &signaling.Client{
 		URL:       id.Server,
 		Secret:    id.Secret,
@@ -300,13 +303,7 @@ func (n *Node) handle(m signaling.Msg) {
 		n.opts.Log("serverError", m.Code, m.Message)
 
 	case "signal":
-		n.mu.Lock()
-		warn := !n.warned
-		n.warned = true
-		n.mu.Unlock()
-		if warn {
-			n.opts.Log("noTransfers", n.peerName(m.FromID()))
-		}
+		n.onSignal(m)
 	}
 }
 

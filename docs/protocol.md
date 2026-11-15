@@ -96,12 +96,14 @@ Each transfer uses **its own `RTCPeerConnection`**, identified by a transfer id 
 | `offer` | `sdp`, `tid` | sender → receiver |
 | `answer` | `sdp`, `tid` | receiver → sender |
 | `candidate` | `candidate` (`RTCIceCandidateInit`), `tid` | both, trickled |
+| `abort` *(v1)* | `tid`, `reason` | either side: the transfer is over, close it |
 
 - `tid` *(v1)*: 16 random bytes as 32 hex characters, chosen by the sender. The receiver echoes it in its `answer` and candidates. A `tid` belongs to one peer: signals from another device with the same `tid` are ignored.
 - Candidates that arrive before the remote description is set must be **queued** and added after `setRemoteDescription` (they used to be dropped).
 - ICE servers: `stun:stun.l.google.com:19302`, `stun:stun1.l.google.com:19302`. No TURN yet.
 - Receivers must ignore signals from devices they are not paired with, even though the server already filters them.
 - A connection is closed when its transfer ends; it is never reused for another transfer.
+- `abort` ends a transfer early so the other side does not wait for a timeout. `reason` is one of `CANCELLED` (the user cancelled), `BUSY` (too many transfers at once; the CLI accepts 4), `NOT_RECEIVING` (the node is not running `listen`, e.g. a one-shot `fileswap peers`), `ERROR`. The receiver discards partial data. An abort is not sent to a device the server reports offline.
 
 ---
 
@@ -121,16 +123,27 @@ receiver → sender   text    ack     {"__ack":true,"ok":true,"received":48213,"
 | meta | `name` (string), `size` (bytes, integer ≥ 0), `type` (MIME, default `application/octet-stream`), `v` *(v1)* protocol version |
 | chunk | Raw bytes, at most 16 384. Senders should apply backpressure (the web client waits while `bufferedAmount` > 256 KB) |
 | end | `__end: true`; `sha256` *(v1, optional)* — lowercase hex SHA-256 of the whole file |
-| ack *(v1)* | `__ack: true`; `ok`; `received` (bytes); `sha256` (optional, as computed by the receiver); `error` when `ok` is false: `SIZE_MISMATCH`, `HASH_MISMATCH`, `WRITE_FAILED` |
+| ack *(v1)* | `__ack: true`; `ok`; `received` (bytes); `sha256` (optional, as computed by the receiver); `error` when `ok` is false: `SIZE_MISMATCH`, `HASH_MISMATCH`, `WRITE_FAILED`, `NO_SPACE` |
 
 Rules:
 
 - The receiver checks `received == meta.size`. If both sides have a hash (end's `sha256` and its own), they must match. The result goes in the ack.
 - The sender treats the transfer as done **only after `ack.ok == true`**, then closes the connection. The CLI exits non-zero on `ok: false` or a missing ack.
+- An ack can come **before** `end`: a receiver that cannot take the file (e.g. `NO_SPACE`, checked against free disk space as soon as `meta` arrives, or more bytes than announced) acks `ok: false` right away and the sender stops.
 - `sha256` is optional because browsers have no Web Crypto on plain HTTP (only on HTTPS or `localhost`), and the web client only hashes files up to 512 MB. The CLI always sends and checks it.
 - **Receivers must never use `meta.name` as a path.** The CLI keeps only the last path component, removes control characters and leading dots, and never overwrites an existing file (`name (1).ext`). Browsers hand the name to the download attribute, which the browser sanitizes.
 
-Timeouts in the web client: 30 s for the channel to open, 60 s for the ack after `end`.
+Timeouts (web client and CLI):
+
+| What | Limit | Then |
+|---|---|---|
+| DataChannel opens after the offer | 30 s | fail, `abort` `ERROR` |
+| No bytes sent or received while transferring | 30 s (5 s once the server reports the other device offline) | fail, `abort` `ERROR` |
+| Connection `disconnected` | 10 s | fail (connection lost) |
+| Connection `failed` / `closed`, or DataChannel closed before the ack | — | fail at once |
+| Ack after `end` | 60 s | web: assume an old receiver and report success; CLI: fail |
+
+The CLI receiver writes into a hidden `.fileswap-*.part` file in the swap folder and renames it to the final name only after the size and hash check, so an interrupted transfer never leaves a truncated file under the real name. Leftover `.part` files older than an hour are removed when `listen` starts.
 
 ---
 

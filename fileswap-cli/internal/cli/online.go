@@ -17,6 +17,7 @@ import (
 
 	"github.com/SethSterling22/SwapFile/fileswap-cli/internal/identity"
 	"github.com/SethSterling22/SwapFile/fileswap-cli/internal/node"
+	"github.com/SethSterling22/SwapFile/fileswap-cli/internal/transfer"
 )
 
 // Commands that need the server. Each one first asks a running `listen`
@@ -269,6 +270,7 @@ func runListen(e *env, args []string) error {
 	fs := newFlags("listen")
 	daemon := fs.Bool("d", false, "")
 	fs.BoolVar(daemon, "daemon", false, "")
+	dirFlag := fs.String("dir", "", "")
 	if err := parse(fs, args); err != nil {
 		return err
 	}
@@ -279,15 +281,32 @@ func runListen(e *env, args []string) error {
 	if err != nil {
 		return err
 	}
+	inbox, err := id.Inbox()
+	if *dirFlag != "" {
+		inbox, err = resolveDir(*dirFlag)
+	}
+	if err != nil {
+		return err
+	}
+	if err := ensureInbox(inbox); err != nil {
+		return err
+	}
+	transfer.CleanStale(inbox)
 	if *daemon && os.Getenv("FILESWAP_DAEMON") == "" {
-		return startDaemon(e, id)
+		return startDaemon(e, id, inbox)
 	}
 
 	interactive := os.Getenv("FILESWAP_DAEMON") == "" && isTerminal(os.Stdin)
 	logf := func(event string, a ...any) {
+		switch event {
+		case "receiveFailed", "receiveFailedFile", "sendFailed":
+			if r, ok := a[len(a)-1].(string); ok {
+				a[len(a)-1] = reasonMsg(r)
+			}
+		}
 		fmt.Fprintf(e.out, "%s  %s\n", time.Now().Format("15:04:05"), tf("log."+event, a...))
 	}
-	opts := node.Options{Dir: e.dir, Version: e.version, HandleRequests: true, Log: logf}
+	opts := node.Options{Dir: e.dir, Version: e.version, HandleRequests: true, InboxDir: inbox, Log: logf}
 	if interactive {
 		opts.Decide = newPrompter(e).decide
 	}
@@ -305,6 +324,7 @@ func runListen(e *env, args []string) error {
 	go n.ServeControl(ctx, ln, cancel)
 
 	fmt.Fprintln(e.out, fmt.Sprintf(t("listen.banner"), id.Name, id.ID(), id.Server))
+	fmt.Fprintln(e.out, fmt.Sprintf(t("listen.inbox"), inbox))
 	if interactive {
 		fmt.Fprintln(e.out, t("listen.hint"))
 	} else {
@@ -320,7 +340,7 @@ func runListen(e *env, args []string) error {
 
 // startDaemon re-runs `fileswap listen` detached from the terminal, logging
 // to a file, and returns once its control socket answers.
-func startDaemon(e *env, id *identity.Identity) error {
+func startDaemon(e *env, id *identity.Identity, inbox string) error {
 	path := node.SocketPath(id.ID())
 	if resp, err := node.Call(context.Background(), path, node.Request{Cmd: "status"}); err == nil {
 		pid := ""
@@ -347,7 +367,7 @@ func startDaemon(e *env, id *identity.Identity) error {
 	}
 	defer f.Close()
 
-	cmd := exec.Command(exe, "--config", dir, "listen")
+	cmd := exec.Command(exe, "--config", dir, "listen", "--dir", inbox)
 	cmd.Env = append(os.Environ(), "FILESWAP_DAEMON=1")
 	cmd.Stdout, cmd.Stderr = f, f
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
@@ -439,6 +459,23 @@ func (p *prompter) decide(ctx context.Context, code, name string) bool {
 	}
 }
 
+// reasonMsg translates a transfer failure reason from the node package
+// ("CODE", "CODE: detail" or "PEER_ABORTED:<abort reason>").
+func reasonMsg(r string) string {
+	if detail, ok := strings.CutPrefix(r, node.CodePeerAborted+":"); ok {
+		detail = strings.TrimSpace(detail)
+		if _, known := messages["en"]["abort."+detail]; known {
+			detail = t("abort." + detail)
+		}
+		return tf("nerr."+node.CodePeerAborted, detail)
+	}
+	code, detail, _ := strings.Cut(r, ": ")
+	if _, ok := messages["en"]["nerr."+code]; ok {
+		return tf("nerr."+code, detail)
+	}
+	return r
+}
+
 // nodeErr translates node error codes into the user's language.
 func nodeErr(err error, id *identity.Identity) error {
 	var ne *node.Error
@@ -446,8 +483,15 @@ func nodeErr(err error, id *identity.Identity) error {
 		return err
 	}
 	detail := ne.Detail
-	if ne.Code == node.CodeOffline && detail == "" {
+	switch {
+	case ne.Code == node.CodeOffline && detail == "":
 		detail = id.Server
+	case ne.Code == node.CodePeerAborted:
+		if _, ok := messages["en"]["abort."+detail]; ok {
+			detail = t("abort." + detail)
+		} else if detail == "" {
+			detail = t("abort.CANCELLED")
+		}
 	}
 	key := "nerr." + ne.Code
 	if _, ok := messages["en"][key]; !ok {

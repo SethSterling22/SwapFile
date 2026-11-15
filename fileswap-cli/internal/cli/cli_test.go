@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"os"
 	"strings"
 	"testing"
 )
@@ -44,14 +45,6 @@ func TestUnknownCommand(t *testing.T) {
 	lang = "en"
 	code, _, errOut := run(t, t.TempDir(), "frobnicate")
 	if code != exitUsage || !strings.Contains(errOut, "unknown command") {
-		t.Errorf("code %d, stderr %q", code, errOut)
-	}
-}
-
-func TestNotYet(t *testing.T) {
-	lang = "en"
-	code, _, errOut := run(t, t.TempDir(), "-tfr", "laptop", "a.txt")
-	if code != exitError || !strings.Contains(errOut, "`tfr` is not available yet") {
 		t.Errorf("code %d, stderr %q", code, errOut)
 	}
 }
@@ -104,6 +97,30 @@ func TestInitIDAllow(t *testing.T) {
 	}
 	if code, out, _ := run(t, dir, "stop"); code != 0 || !strings.Contains(out, "not running") {
 		t.Fatalf("stop: %d %q", code, out)
+	}
+}
+
+func TestSwapFolderAndTfrArgs(t *testing.T) {
+	lang = "en"
+	dir := t.TempDir()
+	t.Setenv("HOME", t.TempDir())
+	if code, out, errOut := run(t, dir, "init", "--name", "srv"); code != 0 || !strings.Contains(out, "Folder:") || !strings.Contains(out, "/FileSwap") {
+		t.Fatalf("init default folder: %d %q %q", code, out, errOut)
+	}
+	inbox := t.TempDir() + "/inbox"
+	if code, out, _ := run(t, dir, "init", "--dir", inbox); code != 0 || !strings.Contains(out, "Folder:  "+inbox) {
+		t.Fatalf("init --dir: %d %q", code, out)
+	}
+	if code, _, _ := run(t, dir, "tfr", "only-one-arg"); code != exitUsage {
+		t.Fatalf("tfr with one arg: %d", code)
+	}
+	if code, _, errOut := run(t, dir, "tfr", "laptop", t.TempDir()); code != exitError || !strings.Contains(errOut, "not a regular file") {
+		t.Fatalf("tfr folder: %d %q", code, errOut)
+	}
+	f := t.TempDir() + "/a.txt"
+	os.WriteFile(f, []byte("x"), 0o600)
+	if code, _, errOut := run(t, dir, "-tfr", "laptop", f); code != exitError || !strings.Contains(errOut, "no paired device matches") {
+		t.Fatalf("tfr unknown node: %d %q", code, errOut)
 	}
 }
 
