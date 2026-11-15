@@ -323,7 +323,9 @@ func runListen(e *env, args []string) error {
 	}
 	go n.ServeControl(ctx, ln, cancel)
 
-	fmt.Fprintln(e.out, fmt.Sprintf(t("listen.banner"), id.Name, id.ID(), id.Server))
+	fmt.Fprintln(e.out, fmt.Sprintf(t("listen.banner"), id.Name, id.Server))
+	fmt.Fprintln(e.out, t("listen.code"))
+	fmt.Fprintln(e.out, bold(e, id.ID()))
 	fmt.Fprintln(e.out, fmt.Sprintf(t("listen.inbox"), inbox))
 	if interactive {
 		fmt.Fprintln(e.out, t("listen.hint"))
@@ -419,6 +421,14 @@ func logFile() (string, error) {
 		return "", err
 	}
 	return filepath.Join(dir, "listen.log"), nil
+}
+
+// bold highlights s when writing to a terminal (and NO_COLOR is not set).
+func bold(e *env, s string) string {
+	if e.out != os.Stdout || !isTerminal(os.Stdout) || os.Getenv("NO_COLOR") != "" || os.Getenv("TERM") == "dumb" {
+		return s
+	}
+	return "\033[1m" + s + "\033[0m"
 }
 
 func isTerminal(f *os.File) bool {

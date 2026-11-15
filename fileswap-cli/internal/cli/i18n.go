@@ -172,7 +172,8 @@ Stop it with Ctrl+C, or with ` + "`fileswap stop`" + ` from another terminal.
 		"stop.done":         "Offline.",
 		"stop.notRunning":   "listen is not running.",
 
-		"listen.banner":     "%s (%s) going online at %s.",
+		"listen.banner":     "%s going online at %s.",
+		"listen.code":       "Device code (type it in the web app to pair):",
 		"listen.hint":       "No port is opened. Stop with Ctrl+C or `fileswap stop`.",
 		"listen.hintDaemon": "No port is opened. Stop with `fileswap stop`. Pairing requests not in the allow list are rejected.",
 		"listen.stopped":    "Offline.",
@@ -368,7 +369,8 @@ Se detiene con Ctrl+C, o con ` + "`fileswap stop`" + ` desde otra terminal.
 		"stop.done":         "Desconectado.",
 		"stop.notRunning":   "listen no está corriendo.",
 
-		"listen.banner":     "%s (%s) conectándose a %s.",
+		"listen.banner":     "%s conectándose a %s.",
+		"listen.code":       "Código del dispositivo (escríbelo en la app web para vincular):",
 		"listen.hint":       "No se abre ningún puerto. Detén con Ctrl+C o `fileswap stop`.",
 		"listen.hintDaemon": "No se abre ningún puerto. Detén con `fileswap stop`. Las solicitudes fuera de la lista de permitidos se rechazan.",
 		"listen.stopped":    "Desconectado.",
