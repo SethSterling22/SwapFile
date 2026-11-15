@@ -50,8 +50,8 @@ func TestUnknownCommand(t *testing.T) {
 
 func TestNotYet(t *testing.T) {
 	lang = "en"
-	code, _, errOut := run(t, t.TempDir(), "-sync", "a8ae6e6e-e929-abea-3afc-fc5258c8ccd6")
-	if code != exitError || !strings.Contains(errOut, "`sync` is not available yet") {
+	code, _, errOut := run(t, t.TempDir(), "-tfr", "laptop", "a.txt")
+	if code != exitError || !strings.Contains(errOut, "`tfr` is not available yet") {
 		t.Errorf("code %d, stderr %q", code, errOut)
 	}
 }
@@ -98,6 +98,12 @@ func TestInitIDAllow(t *testing.T) {
 	}
 	if _, out, _ := run(t, dir, "peers"); !strings.Contains(out, "No paired devices") {
 		t.Fatalf("peers: %q", out)
+	}
+	if code, out, _ := run(t, dir, "status"); code != exitNotRunning || !strings.Contains(out, "listen is not running") {
+		t.Fatalf("status: %d %q", code, out)
+	}
+	if code, out, _ := run(t, dir, "stop"); code != 0 || !strings.Contains(out, "not running") {
+		t.Fatalf("stop: %d %q", code, out)
 	}
 }
 

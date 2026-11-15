@@ -43,10 +43,12 @@ var commands = map[string]command{
 	"id":      {runID},
 	"peers":   {runPeers},
 	"allow":   {runAllow},
-	"sync":    {notYet("sync")},
+	"sync":    {runSync},
 	"tfr":     {notYet("tfr")},
-	"listen":  {notYet("listen")},
-	"unpair":  {notYet("unpair")},
+	"listen":  {runListen},
+	"stop":    {runStop},
+	"status":  {runStatus},
+	"unpair":  {runUnpair},
 	"version": {runVersion},
 	"help":    {runHelp},
 }
@@ -106,6 +108,11 @@ func Run(args []string, version string, out, errOut io.Writer) int {
 			fmt.Fprintln(errOut, "fileswap:", u.msg)
 			fmt.Fprint(errOut, "\n"+t("help."+u.cmd))
 			return exitUsage
+		}
+		var x *errExit
+		if errors.As(err, &x) {
+			fmt.Fprintln(out, x.msg)
+			return x.code
 		}
 		if errors.Is(err, flag.ErrHelp) {
 			fmt.Fprint(out, t("help."+name))

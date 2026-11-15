@@ -6,7 +6,9 @@ Most transfer apps connect phones and laptops. `fileswap` adds **servers**: it i
 
 The CLI is a FileSwap device like any browser tab: it has a name and a **device code** (UUID), pairs by code, and uses the same signaling server (`fileswap/server`) and the same transfer format ([docs/protocol.md](../docs/protocol.md)). No extra server, no SSH keys, no open inbound ports.
 
-> **Status:** early development. `init`, `id`, `peers`, `allow`, `version` and `help` work today. Pairing (`sync`), sending (`tfr`) and receiving (`listen`) are being built — see [Roadmap](#roadmap).
+> **Status:** early development. Identity, pairing with browsers and other nodes, presence and `listen` (foreground or background) work. Sending and receiving files (`tfr`) is next — see [Roadmap](#roadmap).
+
+**No open ports.** `fileswap` only makes outgoing connections: a WebSocket to the FileSwap server (the same one the browser reaches) and, for transfers, WebRTC straight to the other device. Nothing on the node needs to be reachable from the network.
 
 ---
 
@@ -47,15 +49,28 @@ fileswap init --name srv-01 --server 192.168.1.10:7341
 fileswap id
 ```
 
-Pair from the web app by typing (or pasting) the code under **"Código del otro dispositivo"**, or open the pairing link printed by `fileswap id` in the browser.
-
-Planned flow once pairing and transfers land:
+**Pair from the browser:** put the node online, then type (or paste) its code in the web app under **"Código del otro dispositivo"**, or open the pairing link from `fileswap id`.
 
 ```bash
-fileswap listen --dir ~/FileSwap        # on the server: stay online, receive files
-fileswap sync 1f2e3d4c-....             # pair with a device by its code   (also: -sync)
-fileswap tfr laptop ./backup.tar.gz     # send a file to a paired device   (also: -tfr)
+fileswap listen                 # asks on the terminal: "Pair with Laptop (…)? [y/N]"
 ```
+
+**Pair from the node:** with FileSwap open in the browser, copy its code and run:
+
+```bash
+fileswap sync 1f2e3d4c-....     # also: -sync — accept the request in the browser
+```
+
+**Keep a server online** in the background, accepting only devices you allowed:
+
+```bash
+fileswap allow 1f2e3d4c-....    # this code is accepted without asking
+fileswap listen -d              # background; log in ~/.local/state/fileswap/listen.log
+fileswap status                 # online? which devices are online?
+fileswap stop                   # go offline
+```
+
+Coming next: `fileswap tfr laptop ./backup.tar.gz` (also `-tfr`) to send, and receiving into a folder while `listen` runs.
 
 ---
 
@@ -67,12 +82,14 @@ Run `fileswap --help` for the list, or `fileswap help <command>` / `fileswap <co
 |---|---|---|
 | `init --name <name> [--server <url>] [--force]` | | Create this node's identity. Re-running keeps the code and updates name/server; `--force` makes a new code |
 | `id` | | Show name, device code, server and the browser pairing link |
-| `peers` | | List paired devices |
-| `sync <code>` | `-sync` | Ask a device to pair with this node *(coming)* |
-| `tfr <node> <path>` | `-tfr`, `send` | Send a file to a paired device *(coming)* |
-| `listen [--dir <path>]` | | Stay online to receive files and pairing requests *(coming)* |
+| `sync <code>` | `-sync` | Ask a device to pair with this node and wait (up to 2 min) for it to accept |
+| `peers` | | List paired devices and which are online |
+| `unpair <node>` | | Remove a paired device on both sides (only here if the server is unreachable) |
 | `allow <code>` | | Let `listen` accept pairing from this code without asking |
-| `unpair <node>` | | Remove a paired device on both sides *(coming)* |
+| `listen [-d]` | | Stay online for pairing requests (and, soon, files). `-d` runs it in the background |
+| `status` | | Show whether `listen` runs, its connection and peers. Exit code 3 when it is not running |
+| `stop` | | Take a running `listen` offline |
+| `tfr <node> <path>` | `-tfr`, `send` | Send a file to a paired device *(coming)* |
 | `version` | `-v`, `--version` | Print the version |
 | `help [command]` | `-h`, `--help` | Show help |
 
@@ -82,11 +99,24 @@ Run `fileswap --help` for the list, or `fileswap help <command>` / `fileswap <co
 
 Messages are in Spanish when the locale is `es_*` (`LANG`, `LC_MESSAGES` or `LC_ALL`), otherwise English — like the web app follows the browser.
 
+### How `listen` and the other commands share the connection
+
+The server allows **one connection per identity**: a second one with the same secret takes over and the first is disconnected. So while `listen` runs, `sync`, `peers`, `unpair`, `status` and `stop` don't connect themselves — they ask the running `listen` through a local Unix socket (`$XDG_RUNTIME_DIR/fileswap/<code>.sock`, in a directory only your user can open). Without a `listen`, `sync`, `peers` and `unpair` connect just for the command and disconnect.
+
+Pairing requests reaching `listen`:
+
+| Requester | Foreground (`listen`) | Background (`listen -d`) |
+|---|---|---|
+| In the allow list, or already paired | Accepted | Accepted |
+| Anyone else | Asked on the terminal (2 min, default no) | Rejected — `fileswap allow <code>` and retry |
+
 ### Where things are stored
 
 | Path | Content |
 |---|---|
 | `$FILESWAP_CONFIG`, else `$XDG_CONFIG_HOME/fileswap`, else `~/.config/fileswap` | `identity.json` — device secret (mode `0600`), name, server, paired devices, allow list |
+| `$XDG_STATE_HOME/fileswap/listen.log`, else `~/.local/state/fileswap/listen.log` | Log of `listen -d` |
+| `$XDG_RUNTIME_DIR/fileswap/<code>.sock`, else `/tmp/fileswap-<uid>/` | Control socket of a running `listen` |
 
 Override per command with `fileswap --config <dir> <command>`. The secret is what makes the code yours: copying `identity.json` to another machine clones the device.
 
@@ -128,20 +158,25 @@ fileswap-cli/
 ├── cmd/fileswap/       entry point (version set at build time)
 ├── internal/
 │   ├── cli/            argument parsing, help (ES/EN), commands
-│   ├── identity/       secret → device code, identity.json, paired devices
+│   ├── identity/       secret → device code, identity.json (locked updates), paired devices
+│   ├── signaling/      WebSocket client: register, keep-alive, reconnect
+│   ├── node/           a running device: pairing, presence, unpair, control socket
 │   └── transfer/       DataChannel frames, safe file names on receive
 ├── packaging/          nfpm config for .deb and Arch packages
 └── Makefile
 ```
 
-Planned: `internal/signaling` (WebSocket client: register, pairing, presence, reconnect) and `internal/peer` (WebRTC with [pion](https://github.com/pion/webrtc)).
+Planned: `internal/peer` (WebRTC with [pion](https://github.com/pion/webrtc)).
+
+`make test` runs the `node` integration tests against the real signaling server: it starts `fileswap/server` with `node` (after `npm ci` there), or uses `FILESWAP_TEST_SERVER=ws://host:port/ws`. Without either they are skipped. With `make docker-test`, start a server on the host and set `FILESWAP_TEST_SERVER`.
 
 ---
 
 ## Roadmap
 
 - [x] **F0** — Protocol spec, web client fixes (bidirectional transfers, receipt ack, SHA-256), safe file names
-- [ ] **F1** — Signaling client: `sync`, `peers` with online status, pairing requests in `listen`, `unpair`, `id --qr`
+- [x] **F1** — Signaling client: `sync`, `peers` with online status, pairing requests in `listen`, `unpair`, `listen -d` / `status` / `stop`
+- [ ] `id --qr` (QR code in the terminal)
 - [ ] **F2** — Transfers with pion: `tfr` and receiving in `listen`, streamed to disk, ack + SHA-256 check
 - [ ] **F3** — `listen` as a service: systemd unit, reconnect, non-interactive pairing via `allow`
 - [ ] **F4** — End-to-end tests in Arch and Debian containers (two nodes pair, transfer, compare hashes)
