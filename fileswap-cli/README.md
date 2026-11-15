@@ -6,7 +6,7 @@ Most transfer apps connect phones and laptops. `fileswap` adds **servers**: it i
 
 The CLI is a FileSwap device like any browser tab: it has a name and a **device code** (UUID), pairs by code, and uses the same signaling server (`fileswap/server`) and the same transfer format ([docs/protocol.md](../docs/protocol.md)). No extra server, no SSH keys, no open inbound ports.
 
-> **Status:** early development. Identity, pairing with browsers and other nodes, presence and `listen` (foreground or background) work. Sending and receiving files (`tfr`) is next — see [Roadmap](#roadmap).
+> **Status:** early development, but the whole loop works: pair with browsers and other nodes, receive files with `listen` into a swap folder, send with `tfr` — every transfer checked end to end with SHA-256. See [Roadmap](#roadmap).
 
 **No open ports.** `fileswap` only makes outgoing connections: a WebSocket to the FileSwap server (the same one the browser reaches) and, for transfers, WebRTC straight to the other device. Nothing on the node needs to be reachable from the network.
 
@@ -61,6 +61,19 @@ fileswap listen                 # asks on the terminal: "Pair with Laptop (…)?
 fileswap sync 1f2e3d4c-....     # also: -sync — accept the request in the browser
 ```
 
+**Receive files:** while `listen` runs, files sent from a paired browser or node land in the **swap folder** — `~/FileSwap` (`/home/$USER/FileSwap`) unless you choose another:
+
+```bash
+fileswap init --dir /srv/inbox  # save it as this node's swap folder
+fileswap listen --dir /tmp/drop # or just for this run
+```
+
+**Send files:**
+
+```bash
+fileswap tfr laptop ./backup.tar.gz    # also -tfr / send; progress bar, Ctrl+C cancels on both sides
+```
+
 **Keep a server online** in the background, accepting only devices you allowed:
 
 ```bash
@@ -70,8 +83,6 @@ fileswap status                 # online? which devices are online?
 fileswap stop                   # go offline
 ```
 
-Coming next: `fileswap tfr laptop ./backup.tar.gz` (also `-tfr`) to send, and receiving into a folder while `listen` runs.
-
 ---
 
 ## Commands
@@ -80,16 +91,16 @@ Run `fileswap --help` for the list, or `fileswap help <command>` / `fileswap <co
 
 | Command | Alias | What it does |
 |---|---|---|
-| `init --name <name> [--server <url>] [--force]` | | Create this node's identity. Re-running keeps the code and updates name/server; `--force` makes a new code |
-| `id` | | Show name, device code, server and the browser pairing link |
+| `init --name <name> [--server <url>] [--dir <path>] [--force]` | | Create this node's identity. Re-running keeps the code and updates name/server/swap folder; `--force` makes a new code |
+| `id` | | Show name, device code, server, swap folder and the browser pairing link |
 | `sync <code>` | `-sync` | Ask a device to pair with this node and wait (up to 2 min) for it to accept |
 | `peers` | | List paired devices and which are online |
 | `unpair <node>` | | Remove a paired device on both sides (only here if the server is unreachable) |
 | `allow <code>` | | Let `listen` accept pairing from this code without asking |
-| `listen [-d]` | | Stay online for pairing requests (and, soon, files). `-d` runs it in the background |
+| `listen [-d] [--dir <path>]` | | Stay online to receive files (into the swap folder) and pairing requests. `-d` runs it in the background |
 | `status` | | Show whether `listen` runs, its connection and peers. Exit code 3 when it is not running |
 | `stop` | | Take a running `listen` offline |
-| `tfr <node> <path>` | `-tfr`, `send` | Send a file to a paired device *(coming)* |
+| `tfr <node> <path>` | `-tfr`, `send` | Send a file to a paired, online device and wait for its SHA-256-checked confirmation |
 | `version` | `-v`, `--version` | Print the version |
 | `help [command]` | `-h`, `--help` | Show help |
 
@@ -110,11 +121,20 @@ Pairing requests reaching `listen`:
 | In the allow list, or already paired | Accepted | Accepted |
 | Anyone else | Asked on the terminal (2 min, default no) | Rejected — `fileswap allow <code>` and retry |
 
+### Transfers
+
+- One WebRTC connection per transfer, straight between the two devices (DTLS-encrypted in transit). STUN (`stun.l.google.com`) helps cross NATs; there is no TURN relay yet.
+- Received files are written to a hidden `.fileswap-*.part` file and renamed only after the size and SHA-256 match, so a cut transfer never leaves a truncated file. Names are reduced to a plain file name and never overwrite: `report.pdf`, `report (1).pdf`, `backup (1).tar.gz`.
+- The receiver checks free disk space as soon as the file is announced and refuses with `NO_SPACE`.
+- Failures end quickly and on both sides: cancel (Ctrl+C / the web app's Cancel), connection lost (10 s), no progress (30 s, or 5 s once the other device is reported offline), no confirmation (60 s). Up to 4 incoming transfers at once.
+- Folders are not supported yet (`tar` them first).
+
 ### Where things are stored
 
 | Path | Content |
 |---|---|
 | `$FILESWAP_CONFIG`, else `$XDG_CONFIG_HOME/fileswap`, else `~/.config/fileswap` | `identity.json` — device secret (mode `0600`), name, server, paired devices, allow list |
+| `~/FileSwap` (or `init --dir` / `listen --dir`), mode `0700` | Received files |
 | `$XDG_STATE_HOME/fileswap/listen.log`, else `~/.local/state/fileswap/listen.log` | Log of `listen -d` |
 | `$XDG_RUNTIME_DIR/fileswap/<code>.sock`, else `/tmp/fileswap-<uid>/` | Control socket of a running `listen` |
 
@@ -160,13 +180,12 @@ fileswap-cli/
 │   ├── cli/            argument parsing, help (ES/EN), commands
 │   ├── identity/       secret → device code, identity.json (locked updates), paired devices
 │   ├── signaling/      WebSocket client: register, keep-alive, reconnect
-│   ├── node/           a running device: pairing, presence, unpair, control socket
-│   └── transfer/       DataChannel frames, safe file names on receive
+│   ├── node/           a running device: pairing, presence, unpair, transfers, control socket
+│   ├── peer/           pion WebRTC connection per transfer: offer/answer, ICE, abort
+│   └── transfer/       DataChannel framing: streaming sender/receiver, ack, SHA-256, safe names
 ├── packaging/          nfpm config for .deb and Arch packages
 └── Makefile
 ```
-
-Planned: `internal/peer` (WebRTC with [pion](https://github.com/pion/webrtc)).
 
 `make test` runs the `node` integration tests against the real signaling server: it starts `fileswap/server` with `node` (after `npm ci` there), or uses `FILESWAP_TEST_SERVER=ws://host:port/ws`. Without either they are skipped. With `make docker-test`, start a server on the host and set `FILESWAP_TEST_SERVER`.
 
@@ -177,7 +196,7 @@ Planned: `internal/peer` (WebRTC with [pion](https://github.com/pion/webrtc)).
 - [x] **F0** — Protocol spec, web client fixes (bidirectional transfers, receipt ack, SHA-256), safe file names
 - [x] **F1** — Signaling client: `sync`, `peers` with online status, pairing requests in `listen`, `unpair`, `listen -d` / `status` / `stop`
 - [ ] `id --qr` (QR code in the terminal)
-- [ ] **F2** — Transfers with pion: `tfr` and receiving in `listen`, streamed to disk, ack + SHA-256 check
+- [x] **F2** — Transfers with [pion](https://github.com/pion/webrtc): `tfr` and receiving in `listen` into the swap folder, streamed to disk, ack + SHA-256, cancel/abort, stall and connection-loss handling
 - [ ] **F3** — `listen` as a service: systemd unit, reconnect, non-interactive pairing via `allow`
 - [ ] **F4** — End-to-end tests in Arch and Debian containers (two nodes pair, transfer, compare hashes)
 - [ ] Later — E2E encryption shared with the web app, folders / multiple files, resume, TURN

@@ -45,6 +45,23 @@ type Identity struct {
 	Pairs   []Pair `json:"pairs"`
 	// Allow lists device codes whose pairing requests `listen` accepts without asking.
 	Allow []string `json:"allow"`
+	// Dir is the swap folder where `listen` saves received files ("" = DefaultInbox).
+	Dir string `json:"dir,omitempty"`
+}
+
+// DefaultInboxName is the swap folder inside the home directory.
+const DefaultInboxName = "FileSwap"
+
+// Inbox returns the swap folder: Dir, else ~/FileSwap (/home/$USER/FileSwap).
+func (id *Identity) Inbox() (string, error) {
+	if id.Dir != "" {
+		return id.Dir, nil
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(home, DefaultInboxName), nil
 }
 
 // New creates an identity with a fresh random 256-bit secret.

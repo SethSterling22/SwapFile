@@ -34,6 +34,16 @@ func SafeName(name string) string {
 	return truncate(name, maxNameBytes)
 }
 
+// splitExt returns the extension to keep after " (n)", including compound
+// ones like ".tar.gz" so "backup.tar.gz" becomes "backup (1).tar.gz".
+func splitExt(name string) string {
+	ext := filepath.Ext(name)
+	if inner := filepath.Ext(strings.TrimSuffix(name, ext)); strings.EqualFold(inner, ".tar") && len(ext) <= 5 {
+		return inner + ext
+	}
+	return ext
+}
+
 // truncate shortens name to at most n bytes on a rune boundary, keeping a
 // short extension when there is one.
 func truncate(name string, n int) string {
@@ -56,7 +66,7 @@ func truncate(name string, n int) string {
 // anything, adding " (1)", " (2)"… before the extension when needed.
 // name must already be a SafeName.
 func CreateUnique(dir, name string) (*os.File, error) {
-	ext := filepath.Ext(name)
+	ext := splitExt(name)
 	base := strings.TrimSuffix(name, ext)
 	for i := 0; i < 1000; i++ {
 		candidate := name
