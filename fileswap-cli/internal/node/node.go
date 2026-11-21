@@ -80,6 +80,7 @@ type Status struct {
 	ID      string    `json:"id"`
 	Name    string    `json:"name"`
 	Server  string    `json:"server"`
+	Inbox   string    `json:"inbox,omitempty"`
 	PID     int       `json:"pid"`
 	Since   time.Time `json:"since"`
 	Version string    `json:"version"`
@@ -99,6 +100,9 @@ type Node struct {
 	onlineCh  chan struct{} // closed while online
 	pending   *pendingSync
 	transfers map[string]*xfer // by transfer id
+	// goneLog delays "went offline" log lines, so a device that reconnects
+	// right away (page reload, network blip) does not flood the log.
+	goneLog map[string]*time.Timer
 
 	syncMu sync.Mutex // one outgoing pairing request at a time
 }
@@ -122,7 +126,7 @@ func New(opts Options) (*Node, error) {
 	if opts.Log == nil {
 		opts.Log = func(string, ...any) {}
 	}
-	n := &Node{opts: opts, id: id, presence: map[string]bool{}, transfers: map[string]*xfer{}, onlineCh: make(chan struct{}), since: time.Now()}
+	n := &Node{opts: opts, id: id, presence: map[string]bool{}, transfers: map[string]*xfer{}, goneLog: map[string]*time.Timer{}, onlineCh: make(chan struct{}), since: time.Now()}
 	n.client = &signaling.Client{
 		URL:       id.Server,
 		Secret:    id.Secret,
@@ -235,18 +239,11 @@ func (n *Node) handle(m signaling.Msg) {
 		was := n.presence[m.DeviceID]
 		n.presence[m.DeviceID] = m.Online
 		n.mu.Unlock()
-		if m.Online && m.Name != "" {
-			_ = n.update(func(id *identity.Identity) error {
-				for _, p := range id.Pairs {
-					if p.ID == m.DeviceID && p.Name != m.Name {
-						id.SetPair(m.DeviceID, m.Name)
-					}
-				}
-				return nil
-			})
+		if m.Online && m.Name != "" && n.peerName(m.DeviceID) != m.Name && n.identity().HasPair(m.DeviceID) {
+			_ = n.update(func(id *identity.Identity) error { id.SetPair(m.DeviceID, m.Name); return nil })
 		}
 		if was != m.Online {
-			n.opts.Log(map[bool]string{true: "peerOnline", false: "peerOffline"}[m.Online], n.peerName(m.DeviceID))
+			n.logPresence(m.DeviceID, m.Online)
 		}
 
 	case "pair-request":
@@ -305,6 +302,36 @@ func (n *Node) handle(m signaling.Msg) {
 	case "signal":
 		n.onSignal(m)
 	}
+}
+
+// presenceDebounce is how long a device must stay offline before it is logged.
+const presenceDebounce = 5 * time.Second
+
+func (n *Node) logPresence(code string, online bool) {
+	n.mu.Lock()
+	if !online {
+		if n.goneLog[code] == nil {
+			n.goneLog[code] = time.AfterFunc(presenceDebounce, func() {
+				n.mu.Lock()
+				still := !n.presence[code]
+				delete(n.goneLog, code)
+				n.mu.Unlock()
+				if still {
+					n.opts.Log("peerOffline", n.peerName(code))
+				}
+			})
+		}
+		n.mu.Unlock()
+		return
+	}
+	pending := n.goneLog[code]
+	delete(n.goneLog, code)
+	n.mu.Unlock()
+	if pending != nil {
+		pending.Stop() // back before it was reported gone: nothing to log
+		return
+	}
+	n.opts.Log("peerOnline", n.peerName(code))
 }
 
 func (n *Node) peerName(code string) string {
@@ -437,7 +464,7 @@ func (n *Node) Status() Status {
 	id := n.reload()
 	n.mu.Lock()
 	defer n.mu.Unlock()
-	st := Status{Online: n.online, ID: id.ID(), Name: id.Name, Server: id.Server, PID: os.Getpid(), Since: n.since, Version: n.opts.Version}
+	st := Status{Online: n.online, ID: id.ID(), Name: id.Name, Server: id.Server, Inbox: n.opts.InboxDir, PID: os.Getpid(), Since: n.since, Version: n.opts.Version}
 	for _, p := range id.Pairs {
 		st.Peers = append(st.Peers, Peer{ID: p.ID, Name: p.Name, Online: n.presence[p.ID]})
 	}

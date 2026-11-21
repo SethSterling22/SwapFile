@@ -85,7 +85,7 @@ func runInit(e *env, args []string) error {
 		fmt.Fprintln(e.out, t("init.updated"))
 	}
 	fmt.Fprintln(e.out)
-	printID(e, id)
+	printID(e, id, false)
 	fmt.Fprintln(e.out)
 	fmt.Fprintln(e.out, t("init.phi"))
 	return nil
@@ -103,21 +103,29 @@ func runID(e *env, args []string) error {
 	if err != nil {
 		return err
 	}
-	printID(e, id)
-	fmt.Fprintln(e.out, fmt.Sprintf(t("id.config"), e.dir))
+	printID(e, id, true)
 	return nil
 }
 
-func printID(e *env, id *identity.Identity) {
-	fmt.Fprintln(e.out, fmt.Sprintf(t("id.name"), id.Name))
-	fmt.Fprintln(e.out, fmt.Sprintf(t("id.code"), id.ID()))
-	fmt.Fprintln(e.out, fmt.Sprintf(t("id.server"), id.Server))
+// printID shows the identity: name, the device code in a box, server,
+// swap folder and the browser pairing link (and the config dir for `id`).
+func printID(e *env, id *identity.Identity, withConfig bool) {
+	s := newStyle(e)
+	fmt.Fprintln(e.out, s.bold(id.Name))
+	fmt.Fprintln(e.out)
+	printCode(e, s, id.ID())
+	fmt.Fprintln(e.out)
+	rows := [][2]string{{t("ui.server"), id.Server}}
 	if dir, err := id.Inbox(); err == nil {
-		fmt.Fprintln(e.out, fmt.Sprintf(t("id.dir"), dir))
+		rows = append(rows, [2]string{t("ui.folder"), short(dir)})
 	}
 	if link := PairLink(id.Server, id.ID(), id.Name); link != "" {
-		fmt.Fprintln(e.out, fmt.Sprintf(t("id.link"), link))
+		rows = append(rows, [2]string{t("ui.link"), link})
 	}
+	if withConfig {
+		rows = append(rows, [2]string{t("ui.config"), short(e.dir)})
+	}
+	printRows(e, rows)
 }
 
 // resolveDir makes a swap folder path absolute, expanding a leading ~.

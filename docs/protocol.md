@@ -103,7 +103,7 @@ Each transfer uses **its own `RTCPeerConnection`**, identified by a transfer id 
 - ICE servers: `stun:stun.l.google.com:19302`, `stun:stun1.l.google.com:19302`. No TURN yet.
 - Receivers must ignore signals from devices they are not paired with, even though the server already filters them.
 - A connection is closed when its transfer ends; it is never reused for another transfer.
-- `abort` ends a transfer early so the other side does not wait for a timeout. `reason` is one of `CANCELLED` (the user cancelled), `BUSY` (too many transfers at once; the CLI accepts 4), `NOT_RECEIVING` (the node is not running `listen`, e.g. a one-shot `fileswap peers`), `ERROR`. The receiver discards partial data. An abort is not sent to a device the server reports offline.
+- `abort` ends a transfer early so the other side does not wait for a timeout. `reason` is one of `CANCELLED` (the user cancelled), `BUSY` (too many transfers at once; the CLI accepts 4), `NOT_RECEIVING` (the node is not online to receive — `fileswap start` is not running —, e.g. a one-shot `fileswap peers`), `ERROR`. The receiver discards partial data. An abort is not sent to a device the server reports offline.
 
 ---
 
@@ -143,7 +143,7 @@ Timeouts (web client and CLI):
 | Connection `failed` / `closed`, or DataChannel closed before the ack | — | fail at once |
 | Ack after `end` | 60 s | web: assume an old receiver and report success; CLI: fail |
 
-The CLI receiver writes into a hidden `.fileswap-*.part` file in the swap folder and renames it to the final name only after the size and hash check, so an interrupted transfer never leaves a truncated file under the real name. Leftover `.part` files older than an hour are removed when `listen` starts.
+The CLI receiver writes into a hidden `.fileswap-*.part` file in the swap folder and renames it to the final name only after the size and hash check, so an interrupted transfer never leaves a truncated file under the real name. Leftover `.part` files older than an hour are removed when the node starts.
 
 ---
 

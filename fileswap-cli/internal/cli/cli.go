@@ -45,6 +45,7 @@ var commands = map[string]command{
 	"allow":   {runAllow},
 	"sync":    {runSync},
 	"tfr":     {runTfr},
+	"start":   {runStart},
 	"listen":  {runListen},
 	"stop":    {runStop},
 	"status":  {runStatus},

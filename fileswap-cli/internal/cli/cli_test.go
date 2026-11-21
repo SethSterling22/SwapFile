@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"os"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -89,10 +90,10 @@ func TestInitIDAllow(t *testing.T) {
 	if _, out, _ := run(t, dir, "allow", "a8ae6e6e-e929-abea-3afc-fc5258c8ccd6"); !strings.Contains(out, "already allowed") {
 		t.Fatalf("allow twice: %q", out)
 	}
-	if _, out, _ := run(t, dir, "peers"); !strings.Contains(out, "No paired devices") {
+	if _, out, _ := run(t, dir, "peers"); !strings.Contains(out, "None yet") {
 		t.Fatalf("peers: %q", out)
 	}
-	if code, out, _ := run(t, dir, "status"); code != exitNotRunning || !strings.Contains(out, "listen is not running") {
+	if code, out, _ := run(t, dir, "status"); code != exitNotRunning || !strings.Contains(out, "Not running") || !strings.Contains(out, "○ offline") {
 		t.Fatalf("status: %d %q", code, out)
 	}
 	if code, out, _ := run(t, dir, "stop"); code != 0 || !strings.Contains(out, "not running") {
@@ -104,11 +105,11 @@ func TestSwapFolderAndTfrArgs(t *testing.T) {
 	lang = "en"
 	dir := t.TempDir()
 	t.Setenv("HOME", t.TempDir())
-	if code, out, errOut := run(t, dir, "init", "--name", "srv"); code != 0 || !strings.Contains(out, "Folder:") || !strings.Contains(out, "/FileSwap") {
+	if code, out, errOut := run(t, dir, "init", "--name", "srv"); code != 0 || !strings.Contains(out, "Folder  ") || !strings.Contains(out, "/FileSwap") {
 		t.Fatalf("init default folder: %d %q %q", code, out, errOut)
 	}
 	inbox := t.TempDir() + "/inbox"
-	if code, out, _ := run(t, dir, "init", "--dir", inbox); code != 0 || !strings.Contains(out, "Folder:  "+inbox) {
+	if code, out, _ := run(t, dir, "init", "--dir", inbox); code != 0 || !strings.Contains(out, "Folder  "+inbox) {
 		t.Fatalf("init --dir: %d %q", code, out)
 	}
 	if code, _, _ := run(t, dir, "tfr", "only-one-arg"); code != exitUsage {
@@ -124,14 +125,19 @@ func TestSwapFolderAndTfrArgs(t *testing.T) {
 	}
 }
 
+var uuidRE = regexp.MustCompile(`[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}`)
+
+// codeLine returns the device code shown in the boxed "Device code" block.
 func codeLine(t *testing.T, out string) string {
 	t.Helper()
 	for _, l := range strings.Split(out, "\n") {
-		if strings.HasPrefix(l, "Code:") {
-			return strings.TrimSpace(strings.TrimPrefix(l, "Code:"))
+		if strings.HasPrefix(strings.TrimSpace(l), "│") {
+			if code := uuidRE.FindString(l); code != "" {
+				return code
+			}
 		}
 	}
-	t.Fatalf("no Code: line in %q", out)
+	t.Fatalf("no boxed device code in %q", out)
 	return ""
 }
 
