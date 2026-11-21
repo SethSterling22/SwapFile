@@ -52,7 +52,7 @@ Commands:
   stop                                       Go offline
   service  install|remove                    Run it as a systemd user service (starts at login/boot)
   allow    <code>                            Accept pairing from this device without asking
-  tfr      <node> <path>                     Send a file to a paired device         (alias: -tfr, send)
+  tfr      <node> <path>...                  Send files or folders to a paired device (several → one ZIP) (alias: -tfr, send)
   version                                    Print the version
   help     [command]                         Show this help, or a command's help    (alias: --help, -h)
 
@@ -90,10 +90,16 @@ Sends a pairing request to the device with that code and waits (up to 2 min)
 until it is accepted there. The other device must be online: a browser with
 FileSwap open, or a node running ` + "`fileswap start`" + `.
 `,
-		"help.tfr": `Usage: fileswap tfr <node> <path>
+		"help.tfr": `Usage: fileswap tfr <node> <path>...
 
-Sends a file straight to a paired device (peer to peer, WebRTC) and waits
+Sends files straight to a paired device (peer to peer, WebRTC) and waits
 until the other side confirms it received every byte (SHA-256 checked).
+
+One file is sent as it is. Several files, or folders, are packed into a
+single ZIP while sending — on this machine, never on the server — and
+arrive as one .zip ("<folder>.zip" for one folder). Photos, videos and
+other compressed formats are stored as they are; the rest is deflated.
+
 The other device must be online: a browser with FileSwap open, or a node
 running ` + "`fileswap start`" + `. Ctrl+C cancels the transfer on both sides.
 
@@ -229,10 +235,13 @@ Log: journalctl --user -u fileswap -f. ` + "`status`" + ` and ` + "`stop`" + ` w
 		"log.unpairedBy":       "%s removed the pairing",
 		"log.serverError":      "Server error %s: %s",
 
-		"err.notDir": "%s exists and is not a folder",
-		"tfr.done":   "Sent %s (%s) to %s — verified, SHA-256 %s…",
+		"err.notDir":  "%s exists and is not a folder",
+		"tfr.done":    "Sent %s (%s) to %s — verified, SHA-256 %s…",
+		"tfr.doneZip": "Sent %d files as %s (%s) to %s — verified, SHA-256 %s…",
+		"tfr.many":    "%d items",
 
-		"nerr.NOT_A_FILE":      "%s is not a regular file (folders are not supported yet)",
+		"nerr.NOT_A_FILE":      "%s is not a file or a folder",
+		"nerr.NOTHING_TO_SEND": "%s has no files to send",
 		"nerr.PEER_ABORTED":    "the other device cancelled the transfer (%s)",
 		"nerr.CONNECTION_LOST": "the connection with the other device was lost",
 		"nerr.CONNECT_TIMEOUT": "could not connect directly with %s in 30 s (a firewall may be blocking WebRTC/UDP)",
@@ -249,12 +258,14 @@ Log: journalctl --user -u fileswap -f. ` + "`status`" + ` and ` + "`stop`" + ` w
 		"abort.ERROR":          "error",
 
 		"log.receiving":         "Receiving %s (%s) from %s…",
+		"log.receivingZip":      "Receiving %s (%d files, ~%s) from %s…",
 		"log.received":          "Saved %s (%s) from %s — SHA-256 %s… verified",
 		"log.receiveFailed":     "Transfer from %s failed: %s",
 		"log.receiveFailedFile": "Could not receive %s from %s: %s",
 		"log.receiveBusy":       "Refused a transfer from %s: too many at once",
 		"log.connecting":        "Connecting to %s…",
 		"log.sending":           "Sending %s (%s) to %s…",
+		"log.sendingZip":        "Sending %s (%d files, %s) to %s…",
 		"log.sent":              "Sent %s (%s) to %s — SHA-256 %s… verified",
 		"log.sendFailed":        "Could not send %s to %s: %s",
 		"log.sendCancelled":     "Cancelled sending %s to %s",
@@ -277,7 +288,7 @@ Comandos:
   stop                                       Se desconecta
   service  install|remove                    Lo instala como servicio de usuario de systemd (arranca al iniciar)
   allow    <código>                          Acepta la vinculación de ese dispositivo sin preguntar
-  tfr      <nodo> <ruta>                     Envía un archivo a un dispositivo vinculado        (alias: -tfr, send)
+  tfr      <nodo> <ruta>...                  Envía archivos o carpetas a un dispositivo vinculado (varios → un ZIP) (alias: -tfr, send)
   version                                    Muestra la versión
   help     [comando]                         Muestra esta ayuda, o la de un comando             (alias: --help, -h)
 
@@ -315,13 +326,19 @@ Envía una solicitud de vinculación al dispositivo con ese código y espera (ha
 2 min) a que la acepten allí. El otro dispositivo debe estar en línea: un
 navegador con FileSwap abierto, o un nodo con ` + "`fileswap start`" + `.
 `,
-		"help.tfr": `Uso: fileswap tfr <nodo> <ruta>
+		"help.tfr": `Uso: fileswap tfr <nodo> <ruta>...
 
-Envía un archivo directamente a un dispositivo vinculado (de igual a igual,
+Envía archivos directamente a un dispositivo vinculado (de igual a igual,
 WebRTC) y espera a que el otro lado confirme que recibió todos los bytes
-(se comprueba el SHA-256). El otro dispositivo debe estar en línea: un
-navegador con FileSwap abierto, o un nodo con ` + "`fileswap start`" + `.
-Ctrl+C cancela la transferencia en ambos lados.
+(se comprueba el SHA-256).
+
+Un archivo se envía tal cual. Varios archivos, o carpetas, se empaquetan en
+un único ZIP mientras se envían —en este equipo, nunca en el servidor— y
+llegan como un .zip ("<carpeta>.zip" si es una sola carpeta). Fotos, vídeos
+y otros formatos ya comprimidos se guardan tal cual; el resto se comprime.
+
+El otro dispositivo debe estar en línea: un navegador con FileSwap abierto, o
+un nodo con ` + "`fileswap start`" + `. Ctrl+C cancela la transferencia en ambos lados.
 
 <nodo> es un código de dispositivo, un prefijo único de él, o el nombre del dispositivo.
 `,
@@ -456,10 +473,13 @@ Registro: journalctl --user -u fileswap -f. ` + "`status`" + ` y ` + "`stop`" + 
 		"log.unpairedBy":       "%s eliminó la vinculación",
 		"log.serverError":      "Error del servidor %s: %s",
 
-		"err.notDir": "%s existe y no es una carpeta",
-		"tfr.done":   "%s (%s) enviado a %s; verificado, SHA-256 %s…",
+		"err.notDir":  "%s existe y no es una carpeta",
+		"tfr.done":    "%s (%s) enviado a %s; verificado, SHA-256 %s…",
+		"tfr.doneZip": "%d archivos enviados como %s (%s) a %s; verificado, SHA-256 %s…",
+		"tfr.many":    "%d elementos",
 
-		"nerr.NOT_A_FILE":      "%s no es un archivo normal (todavía no se pueden enviar carpetas)",
+		"nerr.NOT_A_FILE":      "%s no es un archivo ni una carpeta",
+		"nerr.NOTHING_TO_SEND": "%s no tiene archivos que enviar",
 		"nerr.PEER_ABORTED":    "el otro dispositivo canceló la transferencia (%s)",
 		"nerr.CONNECTION_LOST": "se perdió la conexión con el otro dispositivo",
 		"nerr.CONNECT_TIMEOUT": "no se pudo conectar directamente con %s en 30 s (un firewall puede estar bloqueando WebRTC/UDP)",
@@ -476,12 +496,14 @@ Registro: journalctl --user -u fileswap -f. ` + "`status`" + ` y ` + "`stop`" + 
 		"abort.ERROR":          "error",
 
 		"log.receiving":         "Recibiendo %s (%s) de %s…",
+		"log.receivingZip":      "Recibiendo %s (%d archivos, ~%s) de %s…",
 		"log.received":          "Guardado %s (%s) de %s; SHA-256 %s… verificado",
 		"log.receiveFailed":     "Falló la transferencia de %s: %s",
 		"log.receiveFailedFile": "No se pudo recibir %s de %s: %s",
 		"log.receiveBusy":       "Transferencia de %s rechazada: demasiadas a la vez",
 		"log.connecting":        "Conectando con %s…",
 		"log.sending":           "Enviando %s (%s) a %s…",
+		"log.sendingZip":        "Enviando %s (%d archivos, %s) a %s…",
 		"log.sent":              "%s (%s) enviado a %s; SHA-256 %s… verificado",
 		"log.sendFailed":        "No se pudo enviar %s a %s: %s",
 		"log.sendCancelled":     "Envío de %s a %s cancelado",

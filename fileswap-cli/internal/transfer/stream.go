@@ -133,11 +133,11 @@ func (s *Sender) Send(ctx context.Context, r io.Reader, meta Meta, progress Prog
 			return "", rerr
 		}
 	}
-	if sent != meta.Size {
+	if meta.Size != UnknownSize && sent != meta.Size {
 		return "", &Error{Code: ErrSizeMismatch, Detail: "file changed while sending"}
 	}
 	sum := hex.EncodeToString(h.Sum(nil))
-	if err := s.sendJSON(End{End: true, SHA256: sum}); err != nil {
+	if err := s.sendJSON(End{End: true, Size: sent, SHA256: sum}); err != nil {
 		return "", err
 	}
 
@@ -270,12 +270,16 @@ func (r *Receiver) HandleMessage(isString bool, data []byte) {
 }
 
 func (r *Receiver) start(m Meta) {
-	if m.Size < 0 {
+	if m.Size < UnknownSize || (m.Size == UnknownSize && m.Approx < 0) {
 		return
 	}
 	r.meta = &m
-	if free, err := freeBytes(r.Dir); err == nil && uint64(m.Size) > free {
-		r.fail(ErrNoSpace, fmt.Sprintf("%d bytes needed, %d free", m.Size, free))
+	need := m.Size
+	if need == UnknownSize {
+		need = m.Approx + m.Approx/100 + 64<<10 // a ZIP is at most a little bigger than its files
+	}
+	if free, err := freeBytes(r.Dir); err == nil && uint64(need) > free {
+		r.fail(ErrNoSpace, fmt.Sprintf("%d bytes needed, %d free", need, free))
 		return
 	}
 	tmp, err := os.CreateTemp(r.Dir, ".fileswap-*.part")
@@ -290,7 +294,7 @@ func (r *Receiver) chunk(b []byte) {
 	if r.meta == nil || r.tmp == nil {
 		return
 	}
-	if r.received+int64(len(b)) > r.meta.Size {
+	if r.meta.Size != UnknownSize && r.received+int64(len(b)) > r.meta.Size {
 		r.fail(ErrSizeMismatch, "more data than announced")
 		return
 	}
@@ -309,8 +313,12 @@ func (r *Receiver) end(end End) {
 	if r.meta == nil || r.tmp == nil {
 		return
 	}
-	if r.received != r.meta.Size {
-		r.fail(ErrSizeMismatch, fmt.Sprintf("got %d of %d bytes", r.received, r.meta.Size))
+	want := r.meta.Size
+	if want == UnknownSize {
+		want = end.Size
+	}
+	if r.received != want || (end.Size != 0 && end.Size != r.received) {
+		r.fail(ErrSizeMismatch, fmt.Sprintf("got %d of %d bytes", r.received, want))
 		return
 	}
 	sum := hex.EncodeToString(r.h.Sum(nil))
@@ -342,7 +350,9 @@ func (r *Receiver) end(end End) {
 	r.tmp = nil
 	r.finished = true
 	r.sendAck(Ack{Ack: true, OK: true, Received: r.received, SHA256: sum})
-	r.done <- Result{Meta: *r.meta, Path: final.Name(), SHA256: sum}
+	meta := *r.meta
+	meta.Size = r.received
+	r.done <- Result{Meta: meta, Path: final.Name(), SHA256: sum}
 }
 
 // Abort discards a transfer that will not complete (connection lost,

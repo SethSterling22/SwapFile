@@ -1,12 +1,15 @@
 package node
 
 import (
+	"archive/zip"
 	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -60,7 +63,7 @@ func TestSendFileOverWebRTC(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	var lastDone int64
-	res, err := send.Send(ctx, "a", path, func(done, total int64) { lastDone = done })
+	res, err := send.Send(ctx, "a", []string{path}, func(done, total int64) { lastDone = done })
 	if err != nil {
 		t.Fatalf("Send: %v", err)
 	}
@@ -77,7 +80,7 @@ func TestSendFileOverWebRTC(t *testing.T) {
 	}
 
 	// A second transfer to the same peer gets a new connection and a new name
-	if _, err := send.Send(ctx, "A", path, nil); err != nil {
+	if _, err := send.Send(ctx, "A", []string{path}, nil); err != nil {
 		t.Fatalf("second Send: %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(inbox, "backup (1).tar.gz")); err != nil {
@@ -91,7 +94,7 @@ func TestSendToNodeNotReceiving(t *testing.T) {
 	path, _ := writeFile(t, 10)
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
-	_, err := send.Send(ctx, "A", path, nil)
+	_, err := send.Send(ctx, "A", []string{path}, nil)
 	var e *Error
 	if !asError(err, &e) || e.Code != CodePeerAborted || e.Detail != abortNotReceiving {
 		t.Fatalf("err = %v, want PEER_ABORTED NOT_RECEIVING", err)
@@ -108,7 +111,7 @@ func TestSendCancelLeavesNothing(t *testing.T) {
 		<-started
 		cancel()
 	}()
-	_, err := send.Send(ctx, "A", path, func(done, total int64) {
+	_, err := send.Send(ctx, "A", []string{path}, func(done, total int64) {
 		if !once && done > 1<<20 {
 			once = true
 			close(started)
@@ -128,15 +131,85 @@ func TestSendErrors(t *testing.T) {
 	path, _ := writeFile(t, 10)
 	ctx := context.Background()
 
-	_, err := send.Send(ctx, "nobody", path, nil)
+	_, err := send.Send(ctx, "nobody", []string{path}, nil)
 	wantCode(t, err, CodeNotFound)
-	_, err = send.Send(ctx, "A", t.TempDir(), nil)
-	wantCode(t, err, CodeNotFile)
+	_, err = send.Send(ctx, "A", []string{t.TempDir()}, nil)
+	wantCode(t, err, CodeNothingToSend)
 
 	recv.stop()
 	waitFor(t, func() bool { st := send.Status(); return len(st.Peers) == 1 && !st.Peers[0].Online })
-	_, err = send.Send(ctx, "A", path, nil)
+	_, err = send.Send(ctx, "A", []string{path}, nil)
 	wantCode(t, err, "DEVICE_OFFLINE")
+}
+
+func TestSendFolderAsZip(t *testing.T) {
+	_, send, inbox := pairedNodes(t, true)
+	root := t.TempDir()
+	folder := filepath.Join(root, "proyecto")
+	os.MkdirAll(filepath.Join(folder, "src"), 0o755)
+	files := map[string][]byte{
+		"proyecto/notes.txt":   bytes.Repeat([]byte("hola mundo "), 50000), // compressible
+		"proyecto/src/main.go": []byte("package main\n"),
+		"proyecto/photo.jpg":   func() []byte { b, _ := os.ReadFile(writeFileOnly(t, 300000)); return b }(),
+	}
+	for name, data := range files {
+		os.WriteFile(filepath.Join(root, name), data, 0o644)
+	}
+	extra := filepath.Join(root, "extra.pdf")
+	os.WriteFile(extra, []byte("%PDF-1.4"), 0o644)
+	files["extra.pdf"] = []byte("%PDF-1.4")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	var last int64
+	res, err := send.Send(ctx, "A", []string{folder, extra}, func(done, total int64) { last = done })
+	if err != nil {
+		t.Fatalf("Send: %v", err)
+	}
+	if res.Items != 4 || !strings.HasPrefix(res.Name, "fileswap-") || !strings.HasSuffix(res.Name, ".zip") {
+		t.Fatalf("result = %+v", res)
+	}
+	var want int64
+	for _, d := range files {
+		want += int64(len(d))
+	}
+	if last != want {
+		t.Fatalf("progress ended at %d, want %d (bytes of the files)", last, want)
+	}
+	zr, err := zip.OpenReader(filepath.Join(inbox, res.Name))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer zr.Close()
+	if len(zr.File) != len(files) {
+		t.Fatalf("zip has %d entries, want %d", len(zr.File), len(files))
+	}
+	for _, f := range zr.File {
+		rc, err := f.Open()
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, _ := io.ReadAll(rc)
+		rc.Close()
+		if !bytes.Equal(got, files[f.Name]) {
+			t.Errorf("entry %s differs", f.Name)
+		}
+		wantMethod := zip.Deflate
+		if strings.HasSuffix(f.Name, ".jpg") || strings.HasSuffix(f.Name, ".pdf") {
+			wantMethod = zip.Store
+		}
+		if f.Method != wantMethod {
+			t.Errorf("entry %s method %d, want %d", f.Name, f.Method, wantMethod)
+		}
+	}
+	if st, _ := os.Stat(filepath.Join(inbox, res.Name)); st.Size() != res.Size {
+		t.Fatalf("saved %d bytes, result says %d", st.Size(), res.Size)
+	}
+}
+
+func writeFileOnly(t *testing.T, size int) string {
+	p, _ := writeFile(t, size)
+	return p
 }
 
 func asError(err error, target **Error) bool {

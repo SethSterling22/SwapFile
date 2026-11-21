@@ -273,7 +273,7 @@ Copy `server/.env.example` → `server/.env`.
 ## Roadmap
 
 - [ ] **v1.1** — E2E encryption (ECDH X25519 key exchange + AES-GCM 256-bit per-chunk)
-- [ ] **v1.1** — Multi-file drag-and-drop transfer
+- [x] **v1.1** — Several files and folders (pick or drag & drop), sent as one ZIP built on the sending device
 - [x] **v1.1** — Bidirectional transfer (one WebRTC connection per transfer, receipt ack + SHA-256)
 - [ ] **v1.2** — CLI node for Linux servers ([fileswap-cli](fileswap-cli/README.md))
 - [ ] **v1.2** — Image preview before download on receiver side

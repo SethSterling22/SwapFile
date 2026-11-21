@@ -120,14 +120,14 @@ receiver → sender   text    ack     {"__ack":true,"ok":true,"received":48213,"
 
 | Frame | Fields |
 |---|---|
-| meta | `name` (string), `size` (bytes, integer ≥ 0), `type` (MIME, default `application/octet-stream`), `v` *(v1)* protocol version |
+| meta | `name` (string), `size` (bytes, integer ≥ 0, or `-1` when not known yet — a ZIP built while sending), `type` (MIME, default `application/octet-stream`), `v` *(v1)* protocol version, `approx` (with `size: -1`: the bytes of the files being zipped, an upper bound used for the free-space check and progress), `items` (number of files in a ZIP, informative) |
 | chunk | Raw bytes, at most 16 384. Senders should apply backpressure (the web client waits while `bufferedAmount` > 256 KB) |
-| end | `__end: true`; `sha256` *(v1, optional)* — lowercase hex SHA-256 of the whole file |
+| end | `__end: true`; `size` — total bytes sent (required when `meta.size` was `-1`); `sha256` *(v1, optional)* — lowercase hex SHA-256 of the whole file |
 | ack *(v1)* | `__ack: true`; `ok`; `received` (bytes); `sha256` (optional, as computed by the receiver); `error` when `ok` is false: `SIZE_MISMATCH`, `HASH_MISMATCH`, `WRITE_FAILED`, `NO_SPACE` |
 
 Rules:
 
-- The receiver checks `received == meta.size`. If both sides have a hash (end's `sha256` and its own), they must match. The result goes in the ack.
+- The receiver checks `received == meta.size` (or `== end.size` when `meta.size` was `-1`, and `end.size` must match what arrived whenever it is sent). If both sides have a hash (end's `sha256` and its own), they must match. The result goes in the ack.
 - The sender treats the transfer as done **only after `ack.ok == true`**, then closes the connection. The CLI exits non-zero on `ok: false` or a missing ack.
 - An ack can come **before** `end`: a receiver that cannot take the file (e.g. `NO_SPACE`, checked against free disk space as soon as `meta` arrives, or more bytes than announced) acks `ok: false` right away and the sender stops.
 - `sha256` is optional because browsers have no Web Crypto on plain HTTP (only on HTTPS or `localhost`), and the web client only hashes files up to 512 MB. The CLI always sends and checks it.
@@ -146,6 +146,14 @@ Timeouts (web client and CLI):
 The CLI receiver writes into a hidden `.fileswap-*.part` file in the swap folder and renames it to the final name only after the size and hash check, so an interrupted transfer never leaves a truncated file under the real name. Leftover `.part` files older than an hour are removed when the node starts.
 
 ---
+
+### Several files and folders
+
+Several files, or a folder, are sent as **one ZIP that the sending device builds while it sends** — the server never sees files, it only relays signaling. The DataChannel framing is unchanged: `meta` announces `name: "<folder>.zip"` (one folder) or `"fileswap-<date>-<time>.zip"`, `size: -1`, `type: "application/zip"`, `approx` and `items`; the chunks are the ZIP as it is written; `end` carries the real `size`.
+
+The ZIP is written as a stream: every entry uses a data descriptor (CRC and sizes after the data, general-purpose flag bit 3) and UTF-8 names (bit 11); ZIP64 extra fields, 8-byte descriptors and the ZIP64 end records are used past 4 GB. Entries are deflated, except formats that are already compressed (photos, video, audio, archives, PDF, Office/ODF documents…), which are stored. Entry names keep the folder structure (`folder/sub/file`), are relative (no `/`, `.` or `..` components) and unique (`a.txt`, `a (1).txt`).
+
+Receivers save the `.zip` as any other file and do not extract it (no path-traversal risk on receive).
 
 ## Compatibility
 

@@ -74,7 +74,10 @@ fileswap start --dir /tmp/drop  # or just for this run
 
 ```bash
 fileswap tfr laptop ./backup.tar.gz    # also -tfr / send; progress bar, Ctrl+C cancels on both sides
+fileswap tfr laptop ./Fotos ./a.pdf    # several files or folders → one ZIP made here while sending
 ```
+
+A folder arrives as `Fotos.zip`; several paths as `fileswap-<date>-<time>.zip`. The ZIP is built on this machine as it is sent (nothing is staged on disk, the server never sees it); photos, videos and other compressed formats are stored as they are, the rest is deflated.
 
 **Watch what happens** in the background: `tail -f ~/.local/state/fileswap/listen.log`.
 
@@ -110,7 +113,7 @@ Run `fileswap --help` for the list, or `fileswap help <command>` / `fileswap <co
 | `status` | | Name, online state, device code, server, swap folder, uptime and the paired-devices table. Exit code 3 when it is not running |
 | `stop` | | Go offline (background or foreground) |
 | `service install\|remove` | | Run as a systemd user service: starts at login (at boot with lingering), restarts on crashes |
-| `tfr <node> <path>` | `-tfr`, `send` | Send a file to a paired, online device and wait for its SHA-256-checked confirmation |
+| `tfr <node> <path>...` | `-tfr`, `send` | Send files or folders to a paired, online device (several → one ZIP) and wait for its SHA-256-checked confirmation |
 | `version` | `-v`, `--version` | Print the version |
 | `help [command]` | `-h`, `--help` | Show help |
 
@@ -137,7 +140,7 @@ Pairing requests reaching the node:
 - Received files are written to a hidden `.fileswap-*.part` file and renamed only after the size and SHA-256 match, so a cut transfer never leaves a truncated file. Names are reduced to a plain file name and never overwrite: `report.pdf`, `report (1).pdf`, `backup (1).tar.gz`.
 - The receiver checks free disk space as soon as the file is announced and refuses with `NO_SPACE`.
 - Failures end quickly and on both sides: cancel (Ctrl+C / the web app's Cancel), connection lost (10 s), no progress (30 s, or 5 s once the other device is reported offline), no confirmation (60 s). Up to 4 incoming transfers at once.
-- Folders are not supported yet (`tar` them first).
+- Several files or folders travel as one ZIP built while sending (ZIP64 past 4 GB). Received ZIPs are saved as they are, never extracted.
 
 ### Where things are stored
 
@@ -210,7 +213,8 @@ fileswap-cli/
 - [x] **F3** — Run as a service: systemd user unit in the packages, `fileswap service install|remove`
 - [x] `id --qr` (QR code in the terminal)
 - [ ] **F4** — End-to-end tests in Arch and Debian containers (two nodes pair, transfer, compare hashes)
-- [ ] Later — E2E encryption shared with the web app, folders / multiple files, resume, TURN
+- [x] Several files and folders as one ZIP built while sending (CLI and web app)
+- [ ] Later — E2E encryption shared with the web app, resume, TURN
 
 ---
 

@@ -22,9 +22,9 @@ import (
 
 // Request is a control command.
 type Request struct {
-	Cmd  string `json:"cmd"` // status | sync | unpair | send | stop
-	Arg  string `json:"arg,omitempty"`
-	Path string `json:"path,omitempty"` // send: absolute file path
+	Cmd   string   `json:"cmd"` // status | sync | unpair | send | stop
+	Arg   string   `json:"arg,omitempty"`
+	Paths []string `json:"paths,omitempty"` // send: absolute paths of files and folders
 }
 
 // Progress is a "send" progress line.
@@ -154,7 +154,7 @@ func (n *Node) serveConn(ctx context.Context, conn net.Conn, stop func()) {
 		sctx, cancel := context.WithCancel(ctx)
 		defer cancel()
 		var last time.Time
-		res, err := n.Send(sctx, req.Arg, req.Path, func(done, total int64) {
+		res, err := n.Send(sctx, req.Arg, req.Paths, func(done, total int64) {
 			if time.Since(last) < 200*time.Millisecond && done != total {
 				return
 			}
