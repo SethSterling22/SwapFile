@@ -43,13 +43,14 @@ Usage:
 Commands:
   init     --name <name> [--server <url>] [--dir <path>]
                                              Create this node's identity
-  id                                         Show this node's name, code and pairing link
+  id       [--qr]                            Show this node's name, code and pairing link (--qr: as a QR code)
   sync     <code>                            Pair with a device (it must accept)    (alias: -sync)
   peers                                      List paired devices and who is online
   unpair   <node>                            Remove a paired device on both sides
   start    [-f] [--dir <path>]               Go online in the background to receive files (-f: foreground)
   status                                     Show whether it is online, and the paired devices
   stop                                       Go offline
+  service  install|remove                    Run it as a systemd user service (starts at login/boot)
   allow    <code>                            Accept pairing from this device without asking
   tfr      <node> <path>                     Send a file to a paired device         (alias: -tfr, send)
   version                                    Print the version
@@ -81,7 +82,7 @@ will have to pair again).
   --dir      Swap folder where received files are saved (default: ~/FileSwap)
   --force    Replace the identity with a new one
 `,
-		"help.id":    "Usage: fileswap id\n\nShows this node's name, device code, server and the link that pairs a browser with it.\n",
+		"help.id":    "Usage: fileswap id [--qr]\n\nShows this node's name, device code, server, swap folder and the link that\npairs a browser with it.\n\n  --qr   Also draw the pairing link as a QR code: scan it with a phone to open\n         FileSwap and pair (the node must be online: fileswap start).\n",
 		"help.peers": "Usage: fileswap peers\n\nLists the paired devices and whether each one is online now.\n",
 		"help.sync": `Usage: fileswap sync <code>
 
@@ -115,13 +116,32 @@ it in the browser, or ` + "`fileswap allow <code>`" + ` first.
 
 Check it with ` + "`fileswap status`" + `; stop it with ` + "`fileswap stop`" + `.
 `,
-		"help.listen":  "Usage: fileswap listen [--dir <path>]\n\nSame as `fileswap start --foreground`: online in this terminal, with the events\non screen and questions about new pairings. Ctrl+C to stop.\n",
-		"help.status":  "Usage: fileswap status\n\nShows whether this node is online (started with `fileswap start`), its device\ncode, server, swap folder and a table of the paired devices.\nExits with code 3 when it is not running.\n",
-		"help.stop":    "Usage: fileswap stop\n\nTakes this node offline (started with `start` in the background or the foreground).\n",
-		"help.allow":   "Usage: fileswap allow <code>\n\nPairing requests from this device code will be accepted without asking (also by `fileswap start` in the background).\n",
-		"help.unpair":  "Usage: fileswap unpair <node>\n\nRemoves a paired device on both sides. If the server cannot be reached,\nit is removed here only.\n",
-		"help.version": "Usage: fileswap version\n",
-		"help.help":    "Usage: fileswap help [command]\n",
+		"help.listen": "Usage: fileswap listen [--dir <path>]\n\nSame as `fileswap start --foreground`: online in this terminal, with the events\non screen and questions about new pairings. Ctrl+C to stop.\n",
+		"help.service": `Usage: fileswap service install|remove
+
+install   Writes a systemd user unit (~/.config/systemd/user/fileswap.service)
+          for this binary and identity, then enables and starts it: the node
+          comes online at every login and is restarted if it crashes. A node
+          started with ` + "`fileswap start`" + ` is handed over to the service.
+remove    Stops and disables the service and deletes that unit.
+
+To also start at boot without logging in: sudo loginctl enable-linger $USER
+Log: journalctl --user -u fileswap -f. ` + "`status`" + ` and ` + "`stop`" + ` work as usual
+(` + "`stop`" + ` keeps it stopped until the next login or ` + "`systemctl --user start fileswap`" + `).
+`,
+		"service.noSystemd":     "systemd (systemctl) was not found; run the node with `fileswap start` instead",
+		"service.wrote":         "Wrote %s",
+		"service.stoppedManual": "Stopped the node started with `fileswap start`; systemd takes over.",
+		"service.installed":     "FileSwap now runs as a systemd user service (starts at login, restarts if it crashes).\nCheck it with `fileswap status`; follow the log with `journalctl --user -u fileswap -f`.",
+		"service.linger":        "To also start it at boot without logging in, run once: sudo loginctl enable-linger %s",
+		"service.notOurs":       "%s was not written by fileswap; leaving it in place",
+		"service.removed":       "The FileSwap service is stopped and removed.",
+		"help.status":           "Usage: fileswap status\n\nShows whether this node is online (started with `fileswap start`), its device\ncode, server, swap folder and a table of the paired devices.\nExits with code 3 when it is not running.\n",
+		"help.stop":             "Usage: fileswap stop\n\nTakes this node offline (started with `start` in the background or the foreground).\n",
+		"help.allow":            "Usage: fileswap allow <code>\n\nPairing requests from this device code will be accepted without asking (also by `fileswap start` in the background).\n",
+		"help.unpair":           "Usage: fileswap unpair <node>\n\nRemoves a paired device on both sides. If the server cannot be reached,\nit is removed here only.\n",
+		"help.version":          "Usage: fileswap version\n",
+		"help.help":             "Usage: fileswap help [command]\n",
 
 		"err.unknownCommand": "unknown command %q (run `fileswap --help`)",
 		"err.notInit":        "this node has no identity yet; run: fileswap init --name <name>",
@@ -152,6 +172,7 @@ Check it with ` + "`fileswap status`" + `; stop it with ` + "`fileswap stop`" + 
 		"peers.none":        "None yet. Pair one with `fileswap sync <code>`, or with `fileswap start -f` and the web app.",
 		"peers.unreachable": "Cannot reach %s; showing the saved list without online status.",
 		"ui.code":           "Device code — type it in the web app to pair",
+		"id.qr":             "Scan to pair from a phone (the node must be online: fileswap start):",
 		"ui.server":         "Server",
 		"ui.folder":         "Folder",
 		"ui.link":           "Link",
@@ -247,13 +268,14 @@ Uso:
 Comandos:
   init     --name <nombre> [--server <url>] [--dir <ruta>]
                                              Crea la identidad de este nodo
-  id                                         Muestra el nombre, el código y el enlace de vinculación
+  id       [--qr]                            Muestra el nombre, el código y el enlace de vinculación (--qr: como QR)
   sync     <código>                          Se vincula con un dispositivo (debe aceptar)       (alias: -sync)
   peers                                      Lista los dispositivos vinculados y quién está en línea
   unpair   <nodo>                            Desvincula un dispositivo en ambos lados
   start    [-f] [--dir <ruta>]               Se pone en línea en segundo plano para recibir archivos (-f: primer plano)
   status                                     Indica si está en línea y muestra los dispositivos vinculados
   stop                                       Se desconecta
+  service  install|remove                    Lo instala como servicio de usuario de systemd (arranca al iniciar)
   allow    <código>                          Acepta la vinculación de ese dispositivo sin preguntar
   tfr      <nodo> <ruta>                     Envía un archivo a un dispositivo vinculado        (alias: -tfr, send)
   version                                    Muestra la versión
@@ -285,7 +307,7 @@ un código nuevo (los dispositivos vinculados tendrán que vincularse de nuevo).
   --dir      Carpeta de swap donde se guarda lo recibido (por defecto: ~/FileSwap)
   --force    Reemplaza la identidad por una nueva
 `,
-		"help.id":    "Uso: fileswap id\n\nMuestra el nombre, el código del dispositivo, el servidor y el enlace para vincular un navegador.\n",
+		"help.id":    "Uso: fileswap id [--qr]\n\nMuestra el nombre, el código del dispositivo, el servidor, la carpeta de swap\ny el enlace para vincular un navegador.\n\n  --qr   Dibuja además el enlace como código QR: escanéalo con el móvil para abrir\n         FileSwap y vincularte (el nodo debe estar en línea: fileswap start).\n",
 		"help.peers": "Uso: fileswap peers\n\nLista los dispositivos vinculados y si cada uno está en línea ahora.\n",
 		"help.sync": `Uso: fileswap sync <código>
 
@@ -321,13 +343,32 @@ en la lista de permitidos. Para vincular uno nuevo, ejecuta
 
 Revísalo con ` + "`fileswap status`" + `; detenlo con ` + "`fileswap stop`" + `.
 `,
-		"help.listen":  "Uso: fileswap listen [--dir <ruta>]\n\nIgual que `fileswap start --foreground`: en línea en esta terminal, con los\neventos en pantalla y preguntas sobre vinculaciones nuevas. Ctrl+C para salir.\n",
-		"help.status":  "Uso: fileswap status\n\nIndica si este nodo está en línea (iniciado con `fileswap start`), su código,\nservidor, carpeta de swap y una tabla con los dispositivos vinculados.\nTermina con código 3 si no está corriendo.\n",
-		"help.stop":    "Uso: fileswap stop\n\nDesconecta este nodo (iniciado con `start`, en segundo o primer plano).\n",
-		"help.allow":   "Uso: fileswap allow <código>\n\nLas solicitudes de vinculación de ese código se aceptarán sin preguntar (también con `fileswap start` en segundo plano).\n",
-		"help.unpair":  "Uso: fileswap unpair <nodo>\n\nDesvincula un dispositivo en ambos lados. Si no se puede llegar al servidor,\nse elimina solo aquí.\n",
-		"help.version": "Uso: fileswap version\n",
-		"help.help":    "Uso: fileswap help [comando]\n",
+		"help.listen": "Uso: fileswap listen [--dir <ruta>]\n\nIgual que `fileswap start --foreground`: en línea en esta terminal, con los\neventos en pantalla y preguntas sobre vinculaciones nuevas. Ctrl+C para salir.\n",
+		"help.service": `Uso: fileswap service install|remove
+
+install   Escribe una unidad de usuario de systemd (~/.config/systemd/user/fileswap.service)
+          para este binario e identidad, y la activa: el nodo se pone en línea
+          en cada inicio de sesión y se reinicia si se cae. Un nodo iniciado
+          con ` + "`fileswap start`" + ` pasa a manos del servicio.
+remove    Detiene y desactiva el servicio y borra esa unidad.
+
+Para que arranque también al encender sin iniciar sesión: sudo loginctl enable-linger $USER
+Registro: journalctl --user -u fileswap -f. ` + "`status`" + ` y ` + "`stop`" + ` funcionan igual
+(` + "`stop`" + ` lo deja detenido hasta el próximo inicio de sesión o ` + "`systemctl --user start fileswap`" + `).
+`,
+		"service.noSystemd":     "no se encontró systemd (systemctl); usa `fileswap start` para poner el nodo en línea",
+		"service.wrote":         "Escrito %s",
+		"service.stoppedManual": "Se detuvo el nodo iniciado con `fileswap start`; ahora lo gestiona systemd.",
+		"service.installed":     "FileSwap corre ahora como servicio de usuario de systemd (arranca al iniciar sesión y se reinicia si se cae).\nRevísalo con `fileswap status`; sigue el registro con `journalctl --user -u fileswap -f`.",
+		"service.linger":        "Para que arranque también al encender sin iniciar sesión, ejecuta una vez: sudo loginctl enable-linger %s",
+		"service.notOurs":       "%s no lo escribió fileswap; se deja como está",
+		"service.removed":       "El servicio de FileSwap está detenido y eliminado.",
+		"help.status":           "Uso: fileswap status\n\nIndica si este nodo está en línea (iniciado con `fileswap start`), su código,\nservidor, carpeta de swap y una tabla con los dispositivos vinculados.\nTermina con código 3 si no está corriendo.\n",
+		"help.stop":             "Uso: fileswap stop\n\nDesconecta este nodo (iniciado con `start`, en segundo o primer plano).\n",
+		"help.allow":            "Uso: fileswap allow <código>\n\nLas solicitudes de vinculación de ese código se aceptarán sin preguntar (también con `fileswap start` en segundo plano).\n",
+		"help.unpair":           "Uso: fileswap unpair <nodo>\n\nDesvincula un dispositivo en ambos lados. Si no se puede llegar al servidor,\nse elimina solo aquí.\n",
+		"help.version":          "Uso: fileswap version\n",
+		"help.help":             "Uso: fileswap help [comando]\n",
 
 		"err.unknownCommand": "comando desconocido %q (ejecuta `fileswap --help`)",
 		"err.notInit":        "este nodo aún no tiene identidad; ejecuta: fileswap init --name <nombre>",
@@ -358,6 +399,7 @@ Revísalo con ` + "`fileswap status`" + `; detenlo con ` + "`fileswap stop`" + `
 		"peers.none":        "Ninguno todavía. Vincula uno con `fileswap sync <código>`, o con `fileswap start -f` y la app web.",
 		"peers.unreachable": "No se puede llegar a %s; se muestra la lista guardada sin estado en línea.",
 		"ui.code":           "Código del dispositivo — escríbelo en la app web para vincular",
+		"id.qr":             "Escanéalo con el móvil para vincularte (el nodo debe estar en línea: fileswap start):",
 		"ui.server":         "Servidor",
 		"ui.folder":         "Carpeta",
 		"ui.link":           "Enlace",

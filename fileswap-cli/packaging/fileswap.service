@@ -1,0 +1,23 @@
+# systemd user unit for the FileSwap node.
+#   systemctl --user enable --now fileswap   # start now and at every login
+#   sudo loginctl enable-linger $USER         # also at boot, without logging in
+#   journalctl --user -u fileswap -f          # follow its log
+# `fileswap service install` sets this up for you (also for a plain binary).
+[Unit]
+Description=FileSwap node: receive files and pairing requests
+Documentation=https://github.com/SethSterling22/SwapFile/tree/main/fileswap-cli
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/fileswap start --foreground
+# One log line per event, no interactive questions (unknown devices are
+# rejected unless allowed with `fileswap allow <code>`)
+Environment=FILESWAP_DAEMON=1
+# `fileswap stop` exits cleanly and stays stopped; a crash is restarted
+Restart=on-failure
+RestartSec=5
+# Exit code 4: another node for this identity is already online; don't loop
+RestartPreventExitStatus=4
+
+[Install]
+WantedBy=default.target

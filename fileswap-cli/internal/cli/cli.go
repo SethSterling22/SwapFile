@@ -48,6 +48,7 @@ var commands = map[string]command{
 	"start":   {runStart},
 	"listen":  {runListen},
 	"stop":    {runStop},
+	"service": {runService},
 	"status":  {runStatus},
 	"unpair":  {runUnpair},
 	"version": {runVersion},
