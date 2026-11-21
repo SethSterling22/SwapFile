@@ -9,11 +9,10 @@
     "test": "node --test"
   },
   "dependencies": {
-    "express": "^4.19.2",
-    "uuid": "^9.0.1",
     "ws": "^8.17.1"
   },
   "engines": {
     "node": ">=18"
-  }
+  },
+  "license": "GPL-3.0-only"
 }
