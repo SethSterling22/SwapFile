@@ -7,9 +7,10 @@ cd "$(dirname "$0")/.."
 CHECK='fileswap --version && fileswap --help | grep -q tfr \
   && fileswap init --name smoke --server 127.0.0.1:7341 | grep -q "ws://127.0.0.1:7341/ws" \
   && fileswap id | grep -Eq "[0-9a-f]{8}-[0-9a-f]{4}-" \
-  && fileswap id | grep -q "Folder:  $HOME/FileSwap" \
+  && fileswap id | grep -q "Folder  ~/FileSwap" \
   && test "$(stat -c %a ~/.config/fileswap/identity.json)" = 600 \
-  && fileswap listen -d && fileswap status | grep -q PID && test -d ~/FileSwap && fileswap stop | grep -q Offline \
+  && fileswap start | grep -q "Running in the background" && fileswap status | grep -q PID \
+  && test -d ~/FileSwap && fileswap stop | grep -q "smoke is offline" \
   && { fileswap status; test $? = 3; } \
   && echo "smoke OK on $(. /etc/os-release; echo $PRETTY_NAME)"'
 

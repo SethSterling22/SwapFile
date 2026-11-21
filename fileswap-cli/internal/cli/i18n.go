@@ -47,16 +47,17 @@ Commands:
   sync     <code>                            Pair with a device (it must accept)    (alias: -sync)
   peers                                      List paired devices and who is online
   unpair   <node>                            Remove a paired device on both sides
-  allow    <code>                            Let listen accept pairing from this device without asking
-  listen   [-d] [--dir <path>]               Go online to receive files and pairing requests (-d: background)
-  status                                     Show whether listen is running
-  stop                                       Take a running listen offline
+  start    [-f] [--dir <path>]               Go online in the background to receive files (-f: foreground)
+  status                                     Show whether it is online, and the paired devices
+  stop                                       Go offline
+  allow    <code>                            Accept pairing from this device without asking
   tfr      <node> <path>                     Send a file to a paired device         (alias: -tfr, send)
   version                                    Print the version
   help     [command]                         Show this help, or a command's help    (alias: --help, -h)
 
 <node> is a device code, a unique prefix of it, or the device's name.
 <code> is the full device code (xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx).
+` + "`fileswap listen`" + ` is ` + "`fileswap start -f`" + `.
 
 Received files go to the swap folder: --dir, else the one set with
 ` + "`init --dir`" + `, else ~/FileSwap.
@@ -77,7 +78,7 @@ will have to pair again).
   --name     Device name shown to other devices (required the first time)
   --server   FileSwap server, e.g. ws://192.168.1.10:7341 or https://fileswap.example.com
              (default: ws://localhost:7341)
-  --dir      Swap folder where listen saves received files (default: ~/FileSwap)
+  --dir      Swap folder where received files are saved (default: ~/FileSwap)
   --force    Replace the identity with a new one
 `,
 		"help.id":    "Usage: fileswap id\n\nShows this node's name, device code, server and the link that pairs a browser with it.\n",
@@ -86,36 +87,38 @@ will have to pair again).
 
 Sends a pairing request to the device with that code and waits (up to 2 min)
 until it is accepted there. The other device must be online: a browser with
-FileSwap open, or a node running ` + "`fileswap listen`" + `.
+FileSwap open, or a node running ` + "`fileswap start`" + `.
 `,
 		"help.tfr": `Usage: fileswap tfr <node> <path>
 
 Sends a file straight to a paired device (peer to peer, WebRTC) and waits
 until the other side confirms it received every byte (SHA-256 checked).
 The other device must be online: a browser with FileSwap open, or a node
-running ` + "`fileswap listen`" + `. Ctrl+C cancels the transfer on both sides.
+running ` + "`fileswap start`" + `. Ctrl+C cancels the transfer on both sides.
 
 <node> is a device code, a unique prefix of it, or the device's name.
 `,
-		"help.listen": `Usage: fileswap listen [-d] [--dir <path>]
+		"help.start": `Usage: fileswap start [-f] [--dir <path>]
 
-Keeps this node online so paired browsers and nodes can send it files, and
-new ones can pair with it. Files are saved in the swap folder, never
-overwriting existing ones. No port is opened: the node only keeps an
-outgoing connection to the FileSwap server.
+Puts this node online in the background and returns the terminal: paired
+browsers and nodes can send it files, which are saved in the swap folder
+(never overwriting). Events go to ~/.local/state/fileswap/listen.log.
+No port is opened: the node only connects out to the FileSwap server.
 
-Pairing requests from devices in the allow list (` + "`fileswap allow`" + `) or already
-paired are accepted automatically. Others are asked on the terminal, or
-rejected when running in the background.
+Pairing in the background only accepts devices already paired or in the
+allow list. To pair a new one, either run ` + "`fileswap sync <code>`" + ` and accept
+it in the browser, or ` + "`fileswap allow <code>`" + ` first.
 
-  -d, --daemon   Run in the background; log to ~/.local/state/fileswap/listen.log
-  --dir <path>   Swap folder for this run (default: the one set with init --dir, else ~/FileSwap)
+  -f, --foreground  Stay in the terminal, show events and ask about new pairings
+                    (Ctrl+C to stop). Same as ` + "`fileswap listen`" + `.
+  --dir <path>      Swap folder for this run (default: init --dir, else ~/FileSwap)
 
-Stop it with Ctrl+C, or with ` + "`fileswap stop`" + ` from another terminal.
+Check it with ` + "`fileswap status`" + `; stop it with ` + "`fileswap stop`" + `.
 `,
-		"help.status":  "Usage: fileswap status\n\nShows whether `listen` is running, its connection and the paired devices.\nExits with code 3 when it is not running.\n",
-		"help.stop":    "Usage: fileswap stop\n\nTakes a running `listen` offline (foreground or background).\n",
-		"help.allow":   "Usage: fileswap allow <code>\n\nPairing requests from this device code will be accepted by `listen` without asking.\n",
+		"help.listen":  "Usage: fileswap listen [--dir <path>]\n\nSame as `fileswap start --foreground`: online in this terminal, with the events\non screen and questions about new pairings. Ctrl+C to stop.\n",
+		"help.status":  "Usage: fileswap status\n\nShows whether this node is online (started with `fileswap start`), its device\ncode, server, swap folder and a table of the paired devices.\nExits with code 3 when it is not running.\n",
+		"help.stop":    "Usage: fileswap stop\n\nTakes this node offline (started with `start` in the background or the foreground).\n",
+		"help.allow":   "Usage: fileswap allow <code>\n\nPairing requests from this device code will be accepted without asking (also by `fileswap start` in the background).\n",
 		"help.unpair":  "Usage: fileswap unpair <node>\n\nRemoves a paired device on both sides. If the server cannot be reached,\nit is removed here only.\n",
 		"help.version": "Usage: fileswap version\n",
 		"help.help":    "Usage: fileswap help [command]\n",
@@ -135,9 +138,9 @@ Stop it with Ctrl+C, or with ` + "`fileswap stop`" + ` from another terminal.
 		"nerr.NOT_FOUND":         "no paired device matches %q",
 		"nerr.AMBIGUOUS":         "%q matches several paired devices; use more of the code",
 		"nerr.BUSY":              "another pairing request is already waiting for an answer",
-		"nerr.REPLACED":          "this identity connected from somewhere else (another listen or command), so this one went offline",
-		"nerr.ALREADY_RUNNING":   "listen is already running (PID %s); stop it with `fileswap stop`",
-		"nerr.DEVICE_OFFLINE":    "that device is not online (open FileSwap on it, or run `fileswap listen` there)",
+		"nerr.REPLACED":          "this identity connected from somewhere else (another `start` or command), so this one went offline",
+		"nerr.ALREADY_RUNNING":   "already running (PID %s); stop it with `fileswap stop`",
+		"nerr.DEVICE_OFFLINE":    "that device is not online (open FileSwap on it, or run `fileswap start` there)",
 		"nerr.TOO_MANY_REQUESTS": "that device has too many pending pairing requests",
 		"nerr.RATE_LIMITED":      "too many messages; wait a minute and try again",
 		"nerr.NOT_REGISTERED":    "not registered with the server yet; try again",
@@ -146,43 +149,49 @@ Stop it with Ctrl+C, or with ` + "`fileswap stop`" + ` from another terminal.
 		"init.created":      "Identity created.",
 		"init.updated":      "Identity updated (device code unchanged).",
 		"init.phi":          "Note: do not use FileSwap for patient or medical data (PHI) — transfers are not end-to-end encrypted yet.",
-		"id.name":           "Name:    %s",
-		"id.code":           "Code:    %s",
-		"id.server":         "Server:  %s",
-		"id.link":           "Pairing link (open it in a browser): %s",
-		"id.config":         "Config:  %s",
-		"peers.none":        "No paired devices. Pair one with `fileswap sync <code>`, or run `fileswap listen` and pair from the web app.",
+		"peers.none":        "None yet. Pair one with `fileswap sync <code>`, or with `fileswap start -f` and the web app.",
 		"peers.unreachable": "Cannot reach %s; showing the saved list without online status.",
-		"peer.online":       "online",
-		"peer.offline":      "offline",
-		"allow.added":       "Pairing requests from %s will be accepted automatically.",
-		"allow.exists":      "%s is already allowed.",
+		"ui.code":           "Device code — type it in the web app to pair",
+		"ui.server":         "Server",
+		"ui.folder":         "Folder",
+		"ui.link":           "Link",
+		"ui.config":         "Config",
+		"ui.log":            "Log",
+		"ui.running":        "Running",
+		"ui.runningValue":   "%s · PID %d · fileswap %s",
+		"ui.paired":         "Paired devices",
+		"ui.col.status":     "STATUS",
+		"ui.col.name":       "NAME",
+		"ui.col.code":       "CODE",
+		"ui.online":         "online",
+		"ui.offline":        "offline",
+		"ui.connecting":     "connecting",
+		"ui.unknown":        "unknown",
+
+		"start.fgTitle":         "online in this terminal (Ctrl+C to stop)",
+		"start.fgHint":          "No port is opened. Events:",
+		"start.hint":            "Running in the background. `fileswap status` to check it, `fileswap stop` to stop it.",
+		"start.already":         "Already running. `fileswap stop` to stop it.",
+		"start.stillConnecting": "Still connecting to the server; check again with `fileswap status`.",
+		"start.failed":          "could not start in the background (log: %s):\n%s",
+		"status.notRunning":     "Not running. Start it with `fileswap start`.",
+		"stop.done":             "%s is offline.",
+		"stop.notRunning":       "%s is not running.",
+		"log.started":           "Started %s (%s), saving files to %s",
+		"log.stopped":           "Offline.",
+
+		"allow.added":  "Pairing requests from %s will be accepted automatically.",
+		"allow.exists": "%s is already allowed.",
 
 		"sync.sent":        "Pairing request sent to %s — accept it on the other device (waiting up to 2 min)…",
 		"sync.paired":      "Paired with %s (%s).",
 		"unpair.done":      "Unpaired %s.",
 		"unpair.localOnly": "Removed %s here; the server could not be reached, so the other device still lists this node.",
 
-		"status.notRunning": "Offline: listen is not running for %s (%s). Start it with `fileswap listen`.",
-		"status.head":       "%s — %s (%s)",
-		"status.online":     "Online",
-		"status.connecting": "Connecting",
-		"status.server":     "Server: %s",
-		"status.pid":        "PID %d, up %s, fileswap %s",
-		"stop.done":         "Offline.",
-		"stop.notRunning":   "listen is not running.",
-
-		"listen.banner":     "%s going online at %s.",
-		"listen.code":       "Device code (type it in the web app to pair):",
-		"listen.hint":       "No port is opened. Stop with Ctrl+C or `fileswap stop`; `fileswap listen -d` keeps it running in the background.",
-		"listen.hintDaemon": "No port is opened. Stop with `fileswap stop`. Pairing requests not in the allow list are rejected.",
-		"listen.stopped":    "Offline.",
-		"listen.bg":         "%s is online in the background (PID %d). Log: %s\nCheck it with `fileswap status`; stop it with `fileswap stop`.",
-		"listen.bgFailed":   "listen did not start in the background (log: %s):\n%s",
 		"prompt.ask":        "  Pair with %s (%s)? [y/N] ",
-		"prompt.background": "listen is in the background, so it cannot ask: bring it back with `fg`, or run `fileswap allow <code>` and retry.",
+		"prompt.background": "running in the background, so it cannot ask: bring it back with `fg`, or run `fileswap allow <code>` and retry.",
 
-		"log.online":           "Online at %s — waiting for files and pairing requests",
+		"log.online":           "Online at %s",
 		"log.offline":          "Disconnected (%s); reconnecting…",
 		"log.connectFailed":    "Cannot reach %s (%s); retrying…",
 		"log.peerOnline":       "%s is online",
@@ -199,10 +208,8 @@ Stop it with Ctrl+C, or with ` + "`fileswap stop`" + ` from another terminal.
 		"log.unpairedBy":       "%s removed the pairing",
 		"log.serverError":      "Server error %s: %s",
 
-		"id.dir":       "Folder:  %s",
-		"err.notDir":   "%s exists and is not a folder",
-		"tfr.done":     "Sent %s (%s) to %s — verified, SHA-256 %s…",
-		"listen.inbox": "Saving received files to %s",
+		"err.notDir": "%s exists and is not a folder",
+		"tfr.done":   "Sent %s (%s) to %s — verified, SHA-256 %s…",
 
 		"nerr.NOT_A_FILE":      "%s is not a regular file (folders are not supported yet)",
 		"nerr.PEER_ABORTED":    "the other device cancelled the transfer (%s)",
@@ -217,7 +224,7 @@ Stop it with Ctrl+C, or with ` + "`fileswap stop`" + ` from another terminal.
 		"nerr.CANCELLED":       "transfer cancelled",
 		"abort.CANCELLED":      "cancelled",
 		"abort.BUSY":           "too many transfers at once",
-		"abort.NOT_RECEIVING":  "it is not receiving files; run `fileswap listen` there",
+		"abort.NOT_RECEIVING":  "it is not receiving files; run `fileswap start` there",
 		"abort.ERROR":          "error",
 
 		"log.receiving":         "Receiving %s (%s) from %s…",
@@ -244,16 +251,17 @@ Comandos:
   sync     <código>                          Se vincula con un dispositivo (debe aceptar)       (alias: -sync)
   peers                                      Lista los dispositivos vinculados y quién está en línea
   unpair   <nodo>                            Desvincula un dispositivo en ambos lados
-  allow    <código>                          listen aceptará la vinculación de ese dispositivo sin preguntar
-  listen   [-d] [--dir <ruta>]               Se pone en línea para recibir archivos y solicitudes (-d: segundo plano)
-  status                                     Indica si listen está corriendo
-  stop                                       Desconecta un listen en marcha
+  start    [-f] [--dir <ruta>]               Se pone en línea en segundo plano para recibir archivos (-f: primer plano)
+  status                                     Indica si está en línea y muestra los dispositivos vinculados
+  stop                                       Se desconecta
+  allow    <código>                          Acepta la vinculación de ese dispositivo sin preguntar
   tfr      <nodo> <ruta>                     Envía un archivo a un dispositivo vinculado        (alias: -tfr, send)
   version                                    Muestra la versión
   help     [comando]                         Muestra esta ayuda, o la de un comando             (alias: --help, -h)
 
 <nodo> es un código de dispositivo, un prefijo único de él, o el nombre del dispositivo.
 <código> es el código completo del dispositivo (xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx).
+` + "`fileswap listen`" + ` equivale a ` + "`fileswap start -f`" + `.
 
 Los archivos recibidos van a la carpeta de swap: --dir, si no la fijada con
 ` + "`init --dir`" + `, si no ~/FileSwap.
@@ -274,7 +282,7 @@ un código nuevo (los dispositivos vinculados tendrán que vincularse de nuevo).
   --name     Nombre que verán los otros dispositivos (obligatorio la primera vez)
   --server   Servidor FileSwap, p. ej. ws://192.168.1.10:7341 o https://fileswap.ejemplo.com
              (por defecto: ws://localhost:7341)
-  --dir      Carpeta de swap donde listen guarda lo recibido (por defecto: ~/FileSwap)
+  --dir      Carpeta de swap donde se guarda lo recibido (por defecto: ~/FileSwap)
   --force    Reemplaza la identidad por una nueva
 `,
 		"help.id":    "Uso: fileswap id\n\nMuestra el nombre, el código del dispositivo, el servidor y el enlace para vincular un navegador.\n",
@@ -283,37 +291,40 @@ un código nuevo (los dispositivos vinculados tendrán que vincularse de nuevo).
 
 Envía una solicitud de vinculación al dispositivo con ese código y espera (hasta
 2 min) a que la acepten allí. El otro dispositivo debe estar en línea: un
-navegador con FileSwap abierto, o un nodo con ` + "`fileswap listen`" + `.
+navegador con FileSwap abierto, o un nodo con ` + "`fileswap start`" + `.
 `,
 		"help.tfr": `Uso: fileswap tfr <nodo> <ruta>
 
 Envía un archivo directamente a un dispositivo vinculado (de igual a igual,
 WebRTC) y espera a que el otro lado confirme que recibió todos los bytes
 (se comprueba el SHA-256). El otro dispositivo debe estar en línea: un
-navegador con FileSwap abierto, o un nodo con ` + "`fileswap listen`" + `.
+navegador con FileSwap abierto, o un nodo con ` + "`fileswap start`" + `.
 Ctrl+C cancela la transferencia en ambos lados.
 
 <nodo> es un código de dispositivo, un prefijo único de él, o el nombre del dispositivo.
 `,
-		"help.listen": `Uso: fileswap listen [-d] [--dir <ruta>]
+		"help.start": `Uso: fileswap start [-f] [--dir <ruta>]
 
-Mantiene este nodo en línea para que los navegadores y nodos vinculados le
-envíen archivos, y para que otros nuevos se vinculen. Los archivos se guardan
-en la carpeta de swap, sin sobrescribir los existentes. No abre ningún
-puerto: solo mantiene una conexión saliente con el servidor FileSwap.
+Pone este nodo en línea en segundo plano y te devuelve la terminal: los
+navegadores y nodos vinculados pueden enviarle archivos, que se guardan en la
+carpeta de swap (sin sobrescribir). Los eventos van a
+~/.local/state/fileswap/listen.log. No abre ningún puerto: solo se conecta
+hacia el servidor FileSwap.
 
-Las solicitudes de dispositivos en la lista de permitidos (` + "`fileswap allow`" + `) o ya
-vinculados se aceptan solas. Las demás se preguntan en la terminal, o se
-rechazan si corre en segundo plano.
+En segundo plano solo se aceptan vinculaciones de dispositivos ya vinculados o
+en la lista de permitidos. Para vincular uno nuevo, ejecuta
+` + "`fileswap sync <código>`" + ` y acéptalo en el navegador, o antes ` + "`fileswap allow <código>`" + `.
 
-  -d, --daemon   Corre en segundo plano; registro en ~/.local/state/fileswap/listen.log
-  --dir <ruta>   Carpeta de swap para esta ejecución (por defecto: la fijada con init --dir, si no ~/FileSwap)
+  -f, --foreground  Se queda en la terminal, muestra los eventos y pregunta por
+                    vinculaciones nuevas (Ctrl+C para salir). Igual que ` + "`fileswap listen`" + `.
+  --dir <ruta>      Carpeta de swap para esta ejecución (por defecto: init --dir, si no ~/FileSwap)
 
-Se detiene con Ctrl+C, o con ` + "`fileswap stop`" + ` desde otra terminal.
+Revísalo con ` + "`fileswap status`" + `; detenlo con ` + "`fileswap stop`" + `.
 `,
-		"help.status":  "Uso: fileswap status\n\nIndica si `listen` está corriendo, su conexión y los dispositivos vinculados.\nTermina con código 3 si no está corriendo.\n",
-		"help.stop":    "Uso: fileswap stop\n\nDesconecta un `listen` en marcha (en primer o segundo plano).\n",
-		"help.allow":   "Uso: fileswap allow <código>\n\n`listen` aceptará sin preguntar las solicitudes de vinculación de ese código.\n",
+		"help.listen":  "Uso: fileswap listen [--dir <ruta>]\n\nIgual que `fileswap start --foreground`: en línea en esta terminal, con los\neventos en pantalla y preguntas sobre vinculaciones nuevas. Ctrl+C para salir.\n",
+		"help.status":  "Uso: fileswap status\n\nIndica si este nodo está en línea (iniciado con `fileswap start`), su código,\nservidor, carpeta de swap y una tabla con los dispositivos vinculados.\nTermina con código 3 si no está corriendo.\n",
+		"help.stop":    "Uso: fileswap stop\n\nDesconecta este nodo (iniciado con `start`, en segundo o primer plano).\n",
+		"help.allow":   "Uso: fileswap allow <código>\n\nLas solicitudes de vinculación de ese código se aceptarán sin preguntar (también con `fileswap start` en segundo plano).\n",
 		"help.unpair":  "Uso: fileswap unpair <nodo>\n\nDesvincula un dispositivo en ambos lados. Si no se puede llegar al servidor,\nse elimina solo aquí.\n",
 		"help.version": "Uso: fileswap version\n",
 		"help.help":    "Uso: fileswap help [comando]\n",
@@ -333,9 +344,9 @@ Se detiene con Ctrl+C, o con ` + "`fileswap stop`" + ` desde otra terminal.
 		"nerr.NOT_FOUND":         "ningún dispositivo vinculado coincide con %q",
 		"nerr.AMBIGUOUS":         "%q coincide con varios dispositivos vinculados; usa más caracteres del código",
 		"nerr.BUSY":              "ya hay otra solicitud de vinculación esperando respuesta",
-		"nerr.REPLACED":          "esta identidad se conectó desde otro lugar (otro listen u otro comando), así que esta se desconectó",
-		"nerr.ALREADY_RUNNING":   "listen ya está corriendo (PID %s); detenlo con `fileswap stop`",
-		"nerr.DEVICE_OFFLINE":    "ese dispositivo no está en línea (abre FileSwap en él, o ejecuta `fileswap listen` allí)",
+		"nerr.REPLACED":          "esta identidad se conectó desde otro lugar (otro `start` u otro comando), así que esta se desconectó",
+		"nerr.ALREADY_RUNNING":   "ya está corriendo (PID %s); detenlo con `fileswap stop`",
+		"nerr.DEVICE_OFFLINE":    "ese dispositivo no está en línea (abre FileSwap en él, o ejecuta `fileswap start` allí)",
 		"nerr.TOO_MANY_REQUESTS": "ese dispositivo tiene demasiadas solicitudes pendientes",
 		"nerr.RATE_LIMITED":      "demasiados mensajes; espera un minuto y vuelve a intentarlo",
 		"nerr.NOT_REGISTERED":    "aún no registrado en el servidor; vuelve a intentarlo",
@@ -344,43 +355,49 @@ Se detiene con Ctrl+C, o con ` + "`fileswap stop`" + ` desde otra terminal.
 		"init.created":      "Identidad creada.",
 		"init.updated":      "Identidad actualizada (el código no cambia).",
 		"init.phi":          "Aviso: no uses FileSwap con datos de pacientes ni información médica (PHI); las transferencias aún no tienen cifrado de extremo a extremo.",
-		"id.name":           "Nombre:   %s",
-		"id.code":           "Código:   %s",
-		"id.server":         "Servidor: %s",
-		"id.link":           "Enlace de vinculación (ábrelo en un navegador): %s",
-		"id.config":         "Config:   %s",
-		"peers.none":        "No hay dispositivos vinculados. Vincula uno con `fileswap sync <código>`, o ejecuta `fileswap listen` y vincúlalo desde la app web.",
+		"peers.none":        "Ninguno todavía. Vincula uno con `fileswap sync <código>`, o con `fileswap start -f` y la app web.",
 		"peers.unreachable": "No se puede llegar a %s; se muestra la lista guardada sin estado en línea.",
-		"peer.online":       "en línea",
-		"peer.offline":      "sin conexión",
-		"allow.added":       "Las solicitudes de vinculación de %s se aceptarán automáticamente.",
-		"allow.exists":      "%s ya estaba permitido.",
+		"ui.code":           "Código del dispositivo — escríbelo en la app web para vincular",
+		"ui.server":         "Servidor",
+		"ui.folder":         "Carpeta",
+		"ui.link":           "Enlace",
+		"ui.config":         "Config",
+		"ui.log":            "Registro",
+		"ui.running":        "Activo",
+		"ui.runningValue":   "%s · PID %d · fileswap %s",
+		"ui.paired":         "Dispositivos vinculados",
+		"ui.col.status":     "ESTADO",
+		"ui.col.name":       "NOMBRE",
+		"ui.col.code":       "CÓDIGO",
+		"ui.online":         "en línea",
+		"ui.offline":        "sin conexión",
+		"ui.connecting":     "conectando",
+		"ui.unknown":        "desconocido",
+
+		"start.fgTitle":         "en línea en esta terminal (Ctrl+C para salir)",
+		"start.fgHint":          "No se abre ningún puerto. Eventos:",
+		"start.hint":            "Corriendo en segundo plano. `fileswap status` para revisarlo, `fileswap stop` para detenerlo.",
+		"start.already":         "Ya estaba corriendo. `fileswap stop` para detenerlo.",
+		"start.stillConnecting": "Todavía conectándose al servidor; revisa de nuevo con `fileswap status`.",
+		"start.failed":          "no se pudo iniciar en segundo plano (registro: %s):\n%s",
+		"status.notRunning":     "No está corriendo. Inícialo con `fileswap start`.",
+		"stop.done":             "%s está desconectado.",
+		"stop.notRunning":       "%s no está corriendo.",
+		"log.started":           "Iniciado %s (%s), los archivos se guardan en %s",
+		"log.stopped":           "Desconectado.",
+
+		"allow.added":  "Las solicitudes de vinculación de %s se aceptarán automáticamente.",
+		"allow.exists": "%s ya estaba permitido.",
 
 		"sync.sent":        "Solicitud enviada a %s; acéptala en el otro dispositivo (esperando hasta 2 min)…",
 		"sync.paired":      "Vinculado con %s (%s).",
 		"unpair.done":      "%s desvinculado.",
 		"unpair.localOnly": "%s eliminado aquí; no se pudo llegar al servidor, así que el otro dispositivo todavía tiene este nodo en su lista.",
 
-		"status.notRunning": "Sin conexión: listen no está corriendo para %s (%s). Inícialo con `fileswap listen`.",
-		"status.head":       "%s — %s (%s)",
-		"status.online":     "En línea",
-		"status.connecting": "Conectando",
-		"status.server":     "Servidor: %s",
-		"status.pid":        "PID %d, activo hace %s, fileswap %s",
-		"stop.done":         "Desconectado.",
-		"stop.notRunning":   "listen no está corriendo.",
-
-		"listen.banner":     "%s conectándose a %s.",
-		"listen.code":       "Código del dispositivo (escríbelo en la app web para vincular):",
-		"listen.hint":       "No se abre ningún puerto. Detén con Ctrl+C o `fileswap stop`; `fileswap listen -d` lo deja corriendo en segundo plano.",
-		"listen.hintDaemon": "No se abre ningún puerto. Detén con `fileswap stop`. Las solicitudes fuera de la lista de permitidos se rechazan.",
-		"listen.stopped":    "Desconectado.",
-		"listen.bg":         "%s está en línea en segundo plano (PID %d). Registro: %s\nRevísalo con `fileswap status`; detenlo con `fileswap stop`.",
-		"listen.bgFailed":   "listen no arrancó en segundo plano (registro: %s):\n%s",
 		"prompt.ask":        "  ¿Vincular con %s (%s)? [s/N] ",
-		"prompt.background": "listen está en segundo plano y no puede preguntar: tráelo con `fg`, o ejecuta `fileswap allow <código>` y vuelve a intentarlo.",
+		"prompt.background": "está en segundo plano y no puede preguntar: tráelo con `fg`, o ejecuta `fileswap allow <código>` y vuelve a intentarlo.",
 
-		"log.online":           "En línea en %s; esperando archivos y solicitudes de vinculación",
+		"log.online":           "En línea en %s",
 		"log.offline":          "Desconectado (%s); reconectando…",
 		"log.connectFailed":    "No se puede llegar a %s (%s); reintentando…",
 		"log.peerOnline":       "%s está en línea",
@@ -397,10 +414,8 @@ Se detiene con Ctrl+C, o con ` + "`fileswap stop`" + ` desde otra terminal.
 		"log.unpairedBy":       "%s eliminó la vinculación",
 		"log.serverError":      "Error del servidor %s: %s",
 
-		"id.dir":       "Carpeta:  %s",
-		"err.notDir":   "%s existe y no es una carpeta",
-		"tfr.done":     "%s (%s) enviado a %s; verificado, SHA-256 %s…",
-		"listen.inbox": "Los archivos recibidos se guardan en %s",
+		"err.notDir": "%s existe y no es una carpeta",
+		"tfr.done":   "%s (%s) enviado a %s; verificado, SHA-256 %s…",
 
 		"nerr.NOT_A_FILE":      "%s no es un archivo normal (todavía no se pueden enviar carpetas)",
 		"nerr.PEER_ABORTED":    "el otro dispositivo canceló la transferencia (%s)",
@@ -415,7 +430,7 @@ Se detiene con Ctrl+C, o con ` + "`fileswap stop`" + ` desde otra terminal.
 		"nerr.CANCELLED":       "transferencia cancelada",
 		"abort.CANCELLED":      "cancelada",
 		"abort.BUSY":           "demasiadas transferencias a la vez",
-		"abort.NOT_RECEIVING":  "no está recibiendo archivos; ejecuta `fileswap listen` allí",
+		"abort.NOT_RECEIVING":  "no está recibiendo archivos; ejecuta `fileswap start` allí",
 		"abort.ERROR":          "error",
 
 		"log.receiving":         "Recibiendo %s (%s) de %s…",
