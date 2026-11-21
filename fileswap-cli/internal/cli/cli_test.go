@@ -115,8 +115,11 @@ func TestSwapFolderAndTfrArgs(t *testing.T) {
 	if code, _, _ := run(t, dir, "tfr", "only-one-arg"); code != exitUsage {
 		t.Fatalf("tfr with one arg: %d", code)
 	}
-	if code, _, errOut := run(t, dir, "tfr", "laptop", t.TempDir()); code != exitError || !strings.Contains(errOut, "not a regular file") {
-		t.Fatalf("tfr folder: %d %q", code, errOut)
+	if code, _, errOut := run(t, dir, "tfr", "laptop", "/dev/null"); code != exitError || !strings.Contains(errOut, "not a file or a folder") {
+		t.Fatalf("tfr special file: %d %q", code, errOut)
+	}
+	if code, _, errOut := run(t, dir, "tfr", "laptop", t.TempDir(), t.TempDir()); code != exitError || !strings.Contains(errOut, "no paired device matches") {
+		t.Fatalf("tfr folders to unknown node: %d %q", code, errOut)
 	}
 	f := t.TempDir() + "/a.txt"
 	os.WriteFile(f, []byte("x"), 0o600)

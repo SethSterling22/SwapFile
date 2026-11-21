@@ -4,10 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"mime"
 	"os"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/pion/webrtc/v4"
@@ -20,7 +22,8 @@ import (
 
 // Transfer error codes, on top of the transfer package's.
 const (
-	CodeNotFile        = "NOT_A_FILE"      // tfr path is a directory or special file
+	CodeNotFile        = "NOT_A_FILE"      // tfr path is a special file (not a file or folder)
+	CodeNothingToSend  = "NOTHING_TO_SEND" // the folders hold no files
 	CodePeerAborted    = "PEER_ABORTED"    // the other side cancelled; Detail has its reason
 	CodeConnectionLost = "CONNECTION_LOST" // the WebRTC connection failed or closed
 	CodeConnectTimeout = "CONNECT_TIMEOUT" // the DataChannel never opened
@@ -149,7 +152,9 @@ func (n *Node) acceptOffer(from string, s peer.Signal) {
 		dc.OnMessage(func(msg webrtc.DataChannelMessage) {
 			if r.Meta() == nil && msg.IsString {
 				defer func() {
-					if m := r.Meta(); m != nil {
+					if m := r.Meta(); m != nil && m.Size == transfer.UnknownSize {
+						n.opts.Log("receivingZip", m.Name, m.Items, fmtBytes(m.Approx), n.peerName(from))
+					} else if m != nil {
 						n.opts.Log("receiving", m.Name, fmtBytes(m.Size), n.peerName(from))
 					}
 				}()
@@ -230,12 +235,15 @@ func watchConnection(conn *peer.Conn, x *xfer) {
 type SendResult struct {
 	Peer   identity.Pair `json:"peer"`
 	Name   string        `json:"name"`
-	Size   int64         `json:"size"`
+	Size   int64         `json:"size"`  // bytes sent (the ZIP's size for several files)
+	Items  int           `json:"items"` // files in the ZIP, 0 for a single file
 	SHA256 string        `json:"sha256"`
 }
 
-// Send transfers the file at path to a paired device (code, prefix or name).
-func (n *Node) Send(ctx context.Context, ref, path string, progress transfer.ProgressFunc) (*SendResult, error) {
+// Send transfers files to a paired device (code, prefix or name). A single
+// regular file goes as it is; several files or folders go as one ZIP built
+// while sending (nothing is staged on disk).
+func (n *Node) Send(ctx context.Context, ref string, paths []string, progress transfer.ProgressFunc) (*SendResult, error) {
 	id := n.reload()
 	p, err := id.Find(ref)
 	if err != nil {
@@ -246,17 +254,37 @@ func (n *Node) Send(ctx context.Context, ref, path string, progress transfer.Pro
 	}
 	pair := *p
 
-	f, err := os.Open(path)
-	if err != nil {
-		return nil, err
+	if len(paths) == 0 {
+		return nil, errf(CodeNotFile, "")
 	}
-	defer f.Close()
-	st, err := f.Stat()
-	if err != nil {
-		return nil, err
+	var single *os.File
+	var st os.FileInfo
+	if len(paths) == 1 {
+		if st, err = os.Stat(paths[0]); err != nil {
+			return nil, err
+		}
+		switch {
+		case st.Mode().IsRegular():
+			if single, err = os.Open(paths[0]); err != nil {
+				return nil, err
+			}
+			defer single.Close()
+		case !st.IsDir():
+			return nil, errf(CodeNotFile, paths[0])
+		}
 	}
-	if !st.Mode().IsRegular() {
-		return nil, errf(CodeNotFile, path)
+	var entries []transfer.Entry
+	if single == nil {
+		entries, err = transfer.CollectEntries(paths)
+		if errors.Is(err, transfer.ErrNotRegular) {
+			return nil, errf(CodeNotFile, err.Error())
+		}
+		if err != nil {
+			return nil, err
+		}
+		if len(entries) == 0 {
+			return nil, errf(CodeNothingToSend, paths[0])
+		}
 	}
 
 	if err := n.WaitOnline(ctx); err != nil {
@@ -316,9 +344,33 @@ func (n *Node) Send(ctx context.Context, ref, path string, progress transfer.Pro
 		}
 	}()
 
-	name := filepath.Base(path)
-	n.opts.Log("sending", name, fmtBytes(st.Size()), pair.Name)
-	sum, err := sender.Send(sctx, f, transfer.Meta{Name: name, Size: st.Size(), Type: mimeType(name)}, progress)
+	var (
+		r     io.Reader
+		meta  transfer.Meta
+		total int64
+		sent  atomic.Int64
+	)
+	if single != nil {
+		total = st.Size()
+		meta = transfer.Meta{Name: filepath.Base(paths[0]), Size: total, Type: mimeType(paths[0])}
+		r = single
+		n.opts.Log("sending", meta.Name, fmtBytes(total), pair.Name)
+	} else {
+		total = transfer.TotalSize(entries)
+		meta = transfer.Meta{Name: transfer.ArchiveName(paths, time.Now()), Size: transfer.UnknownSize, Type: "application/zip", Approx: total, Items: len(entries)}
+		pr, pw := io.Pipe()
+		defer pr.Close()
+		var read atomic.Int64
+		go func() { pw.CloseWithError(transfer.WriteZip(sctx, pw, entries, &read)) }()
+		r = pr
+		if report := progress; report != nil {
+			// Progress counts the files read, since the ZIP's size is not known yet
+			progress = func(int64, int64) { report(read.Load(), total) }
+		}
+		n.opts.Log("sendingZip", meta.Name, len(entries), fmtBytes(total), pair.Name)
+	}
+	name := meta.Name
+	sum, err := sender.Send(sctx, &counter{r: r, n: &sent}, meta, progress)
 	if err != nil {
 		if cause := context.Cause(sctx); cause != nil && !errors.Is(cause, context.Canceled) {
 			err = cause
@@ -342,8 +394,20 @@ func (n *Node) Send(ctx context.Context, ref, path string, progress transfer.Pro
 		}
 		return nil, err
 	}
-	n.opts.Log("sent", name, fmtBytes(st.Size()), pair.Name, sum[:12])
-	return &SendResult{Peer: pair, Name: name, Size: st.Size(), SHA256: sum}, nil
+	n.opts.Log("sent", name, fmtBytes(sent.Load()), pair.Name, sum[:12])
+	return &SendResult{Peer: pair, Name: name, Size: sent.Load(), Items: len(entries), SHA256: sum}, nil
+}
+
+// counter counts the bytes read through it.
+type counter struct {
+	r io.Reader
+	n *atomic.Int64
+}
+
+func (c *counter) Read(p []byte) (int, error) {
+	n, err := c.r.Read(p)
+	c.n.Add(int64(n))
+	return n, err
 }
 
 // waitPeerOnline waits briefly for the presence message of a peer that

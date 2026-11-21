@@ -19,24 +19,28 @@ func runTfr(e *env, args []string) error {
 	if err := parse(fs, args); err != nil {
 		return err
 	}
-	if fs.NArg() != 2 {
+	if fs.NArg() < 2 {
 		return &errUsage{cmd: "tfr", msg: t("err.args")}
 	}
-	ref, path := fs.Arg(0), fs.Arg(1)
+	ref := fs.Arg(0)
 	id, err := loadIdentity(e)
 	if err != nil {
 		return err
 	}
-	abs, err := filepath.Abs(path)
-	if err != nil {
-		return err
-	}
-	st, err := os.Stat(abs)
-	if err != nil {
-		return err
-	}
-	if !st.Mode().IsRegular() {
-		return nodeErr(&node.Error{Code: node.CodeNotFile, Detail: path}, id)
+	var paths []string
+	for _, p := range fs.Args()[1:] {
+		abs, err := filepath.Abs(p)
+		if err != nil {
+			return err
+		}
+		st, err := os.Stat(abs)
+		if err != nil {
+			return err
+		}
+		if !st.Mode().IsRegular() && !st.IsDir() {
+			return nodeErr(&node.Error{Code: node.CodeNotFile, Detail: p}, id)
+		}
+		paths = append(paths, abs)
 	}
 	if p, err := id.Find(ref); err != nil {
 		return nodeErr(&node.Error{Code: node.CodeAmbiguous, Detail: ref}, id)
@@ -47,11 +51,15 @@ func runTfr(e *env, args []string) error {
 	// Ctrl+C cancels the transfer and tells the other device.
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
-	bar := newProgressBar(e, filepath.Base(abs))
+	label := filepath.Base(paths[0])
+	if len(paths) > 1 {
+		label = fmt.Sprintf(t("tfr.many"), len(paths))
+	}
+	bar := newProgressBar(e, label)
 	defer bar.finish()
 
 	var res *node.SendResult
-	if resp, cerr := node.CallStream(ctx, node.SocketPath(id.ID()), node.Request{Cmd: "send", Arg: ref, Path: abs},
+	if resp, cerr := node.CallStream(ctx, node.SocketPath(id.ID()), node.Request{Cmd: "send", Arg: ref, Paths: paths},
 		func(p node.Progress) { bar.update(p.Done, p.Total) }); cerr == nil {
 		res, err = resp.Sent, resp.AsError()
 	} else if ctx.Err() != nil {
@@ -64,7 +72,7 @@ func runTfr(e *env, args []string) error {
 				return &node.Error{Code: node.CodeOffline}
 			}
 			var serr error
-			res, serr = n.Send(ctx, ref, abs, bar.update)
+			res, serr = n.Send(ctx, ref, paths, bar.update)
 			return serr
 		})
 	}
@@ -75,7 +83,11 @@ func runTfr(e *env, args []string) error {
 	if err != nil {
 		return nodeErr(err, id)
 	}
-	fmt.Fprintln(e.out, fmt.Sprintf(t("tfr.done"), res.Name, fmtSize(res.Size), res.Peer.Name, res.SHA256[:16]))
+	if res.Items > 0 {
+		fmt.Fprintln(e.out, fmt.Sprintf(t("tfr.doneZip"), res.Items, res.Name, fmtSize(res.Size), res.Peer.Name, res.SHA256[:16]))
+	} else {
+		fmt.Fprintln(e.out, fmt.Sprintf(t("tfr.done"), res.Name, fmtSize(res.Size), res.Peer.Name, res.SHA256[:16]))
+	}
 	return nil
 }
 
