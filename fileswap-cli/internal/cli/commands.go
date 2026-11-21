@@ -93,6 +93,7 @@ func runInit(e *env, args []string) error {
 
 func runID(e *env, args []string) error {
 	fs := newFlags("id")
+	showQR := fs.Bool("qr", false, "")
 	if err := parse(fs, args); err != nil {
 		return err
 	}
@@ -104,6 +105,19 @@ func runID(e *env, args []string) error {
 		return err
 	}
 	printID(e, id, true)
+	if *showQR {
+		link := PairLink(id.Server, id.ID(), id.Name)
+		lines, err := qrLines(link)
+		if err != nil {
+			return err
+		}
+		fmt.Fprintln(e.out)
+		fmt.Fprintln(e.out, "  "+t("id.qr"))
+		fmt.Fprintln(e.out)
+		for _, l := range lines {
+			fmt.Fprintln(e.out, "  "+l)
+		}
+	}
 	return nil
 }
 

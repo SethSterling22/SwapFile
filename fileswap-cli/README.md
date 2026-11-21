@@ -78,6 +78,19 @@ fileswap tfr laptop ./backup.tar.gz    # also -tfr / send; progress bar, Ctrl+C 
 
 **Watch what happens** in the background: `tail -f ~/.local/state/fileswap/listen.log`.
 
+**Pair a phone by QR:** `fileswap id --qr` draws the pairing link as a QR code in the terminal; scan it with the phone (the node must be online).
+
+**Run it as a service** (starts at login, restarts if it crashes):
+
+```bash
+fileswap service install               # writes ~/.config/systemd/user/fileswap.service and starts it
+sudo loginctl enable-linger $USER      # optional: also start at boot, without logging in
+journalctl --user -u fileswap -f       # its log
+fileswap service remove                # undo
+```
+
+The `.deb` and Arch packages also ship the unit as `/usr/lib/systemd/user/fileswap.service`, so `systemctl --user enable --now fileswap` works too. `fileswap status` and `fileswap stop` work the same with the service (`stop` keeps it stopped until the next login or `systemctl --user start fileswap`).
+
 ---
 
 ## Commands
@@ -87,7 +100,7 @@ Run `fileswap --help` for the list, or `fileswap help <command>` / `fileswap <co
 | Command | Alias | What it does |
 |---|---|---|
 | `init --name <name> [--server <url>] [--dir <path>] [--force]` | | Create this node's identity. Re-running keeps the code and updates name/server/swap folder; `--force` makes a new code |
-| `id` | | Show name, device code, server, swap folder and the browser pairing link |
+| `id [--qr]` | | Show name, device code, server, swap folder and the browser pairing link; `--qr` also draws it as a QR code |
 | `sync <code>` | `-sync` | Ask a device to pair with this node and wait (up to 2 min) for it to accept |
 | `peers` | | List paired devices and which are online |
 | `unpair <node>` | | Remove a paired device on both sides (only here if the server is unreachable) |
@@ -96,6 +109,7 @@ Run `fileswap --help` for the list, or `fileswap help <command>` / `fileswap <co
 | `listen [--dir <path>]` | | Same as `start -f` |
 | `status` | | Name, online state, device code, server, swap folder, uptime and the paired-devices table. Exit code 3 when it is not running |
 | `stop` | | Go offline (background or foreground) |
+| `service install\|remove` | | Run as a systemd user service: starts at login (at boot with lingering), restarts on crashes |
 | `tfr <node> <path>` | `-tfr`, `send` | Send a file to a paired, online device and wait for its SHA-256-checked confirmation |
 | `version` | `-v`, `--version` | Print the version |
 | `help [command]` | `-h`, `--help` | Show help |
@@ -191,10 +205,10 @@ fileswap-cli/
 
 - [x] **F0** — Protocol spec, web client fixes (bidirectional transfers, receipt ack, SHA-256), safe file names
 - [x] **F1** — Signaling client: `sync`, `peers` with online status, pairing requests in `listen`, `unpair`, `listen -d` / `status` / `stop`
-- [ ] `id --qr` (QR code in the terminal)
 - [x] **F2** — Transfers with [pion](https://github.com/pion/webrtc): `tfr` and receiving in `listen` into the swap folder, streamed to disk, ack + SHA-256, cancel/abort, stall and connection-loss handling
 - [x] `start` / `status` / `stop` with readable output (boxed device code, peers table)
-- [ ] **F3** — Run as a service: systemd unit (start at boot, restart on failure)
+- [x] **F3** — Run as a service: systemd user unit in the packages, `fileswap service install|remove`
+- [x] `id --qr` (QR code in the terminal)
 - [ ] **F4** — End-to-end tests in Arch and Debian containers (two nodes pair, transfer, compare hashes)
 - [ ] Later — E2E encryption shared with the web app, folders / multiple files, resume, TURN
 

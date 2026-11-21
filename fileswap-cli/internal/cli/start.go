@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -89,6 +90,10 @@ func runForeground(e *env, id *identity.Identity, inbox string) error {
 	defer cancel()
 	ln, err := n.ListenControl(ctx)
 	if err != nil {
+		var ne *node.Error
+		if errors.As(err, &ne) && ne.Code == node.CodeAlreadyRunning {
+			return &errExit{code: exitAlreadyRunning, msg: "fileswap: " + nodeErr(err, id).Error()}
+		}
 		return nodeErr(err, id)
 	}
 	go n.ServeControl(ctx, ln, cancel)

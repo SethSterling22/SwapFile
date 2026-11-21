@@ -9,6 +9,7 @@ CHECK='fileswap --version && fileswap --help | grep -q tfr \
   && fileswap id | grep -Eq "[0-9a-f]{8}-[0-9a-f]{4}-" \
   && fileswap id | grep -q "Folder  ~/FileSwap" \
   && test "$(stat -c %a ~/.config/fileswap/identity.json)" = 600 \
+  && test -f /usr/lib/systemd/user/fileswap.service && fileswap id --qr | grep -q "█" \
   && fileswap start | grep -q "Running in the background" && fileswap status | grep -q PID \
   && test -d ~/FileSwap && fileswap stop | grep -q "smoke is offline" \
   && { fileswap status; test $? = 3; } \

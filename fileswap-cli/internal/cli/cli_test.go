@@ -125,6 +125,43 @@ func TestSwapFolderAndTfrArgs(t *testing.T) {
 	}
 }
 
+func TestServiceUnit(t *testing.T) {
+	unit := serviceUnit("/opt/my apps/fileswap", "/home/seth/.config/fileswap")
+	for _, want := range []string{
+		`ExecStart="/opt/my apps/fileswap" --config /home/seth/.config/fileswap start --foreground`,
+		"Environment=FILESWAP_DAEMON=1",
+		"Restart=on-failure",
+		"RestartPreventExitStatus=4",
+		"WantedBy=default.target",
+	} {
+		if !strings.Contains(unit, want) {
+			t.Errorf("unit missing %q:\n%s", want, unit)
+		}
+	}
+	if !strings.HasPrefix(unit, serviceMarker) {
+		t.Error("unit does not start with the marker")
+	}
+}
+
+func TestIDQR(t *testing.T) {
+	lang = "en"
+	dir := t.TempDir()
+	run(t, dir, "init", "--name", "srv", "--server", "192.168.1.10:7341")
+	code, out, _ := run(t, dir, "id", "--qr")
+	if code != 0 || !strings.Contains(out, "Scan to pair") {
+		t.Fatalf("id --qr: %d %q", code, out)
+	}
+	lines, err := qrLines("http://192.168.1.10:7341/?pair=x")
+	if err != nil || len(lines) < 10 {
+		t.Fatalf("qrLines: %d lines, %v", len(lines), err)
+	}
+	for _, l := range lines {
+		if len([]rune(l)) != len([]rune(lines[0])) {
+			t.Fatal("QR lines have different widths")
+		}
+	}
+}
+
 var uuidRE = regexp.MustCompile(`[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}`)
 
 // codeLine returns the device code shown in the boxed "Device code" block.
