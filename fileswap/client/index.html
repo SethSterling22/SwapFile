@@ -476,6 +476,9 @@
     .selected-file-info { flex: 1; min-width: 0; }
     .selected-file-name { font-size: .88rem; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .selected-file-size { font-family: var(--font-mono); font-size: .75rem; color: var(--muted); }
+    .selected-file-note { font-size: .75rem; color: var(--muted); margin-top: 4px; line-height: 1.4; overflow-wrap: anywhere; }
+    .selected-file-note:empty { display: none; }
+    .folder-btn { margin-top: 12px; }
 
     /* Progress = strip of manila tape */
     .progress-wrap { display: flex; flex-direction: column; gap: 8px; }
@@ -756,9 +759,11 @@
     </div>
 
     <div class="file-drop-zone" id="drop-zone">
-      <input type="file" id="file-input" />
+      <input type="file" id="file-input" multiple />
+      <input type="file" id="folder-input" webkitdirectory />
       <div class="file-drop-icon">📂</div>
-      <div class="file-drop-text" data-i18n-html="send.drop"><strong>Elige un archivo</strong><br>o arrástralo aquí</div>
+      <div class="file-drop-text" data-i18n-html="send.drop"><strong>Elige archivos</strong><br>o arrástralos aquí, también carpetas</div>
+      <button class="btn btn-ghost btn-sm folder-btn" id="folder-btn" type="button" data-i18n="send.folder">📁 Elegir carpeta</button>
     </div>
 
     <div class="selected-file" id="selected-file">
@@ -766,6 +771,7 @@
       <div class="selected-file-info">
         <div class="selected-file-name" id="selected-name">—</div>
         <div class="selected-file-size" id="selected-size">—</div>
+        <div class="selected-file-note" id="selected-note"></div>
       </div>
       <button class="btn btn-ghost btn-sm" id="clear-file-btn">✕</button>
     </div>
@@ -937,8 +943,11 @@ const I18N = {
     'request.accept':     '✓ Aceptar',
     'request.reject':     'Rechazar',
 
-    'send.title':         'Enviar archivo',
-    'send.drop':          '<strong>Elige un archivo</strong><br>o arrástralo aquí',
+    'send.title':         'Enviar archivos',
+    'send.drop':          '<strong>Elige archivos</strong><br>o arrástralos aquí, también carpetas',
+    'send.folder':        '📁 Elegir carpeta',
+    'send.many':          '{n} archivos',
+    'send.zipNote':       'Se enviarán juntos en un ZIP creado en este dispositivo: {name}',
     'send.send':          'Enviar',
     'common.cancel':      'Cancelar',
     'common.close':       'Cerrar',
@@ -962,6 +971,8 @@ const I18N = {
     'toast.connectTimeout':'⚠️ No se pudo conectar con el otro dispositivo (¿un firewall bloquea WebRTC?)',
     'toast.stalled':      '⚠️ La transferencia dejó de avanzar y se canceló',
     'toast.noSpace':      '⚠️ No hay espacio suficiente en el otro dispositivo',
+    'toast.readError':    '⚠️ No se pudo leer uno de los archivos',
+    'toast.emptyFolder':  'La carpeta no tiene archivos',
     'toast.received':     '✅ Archivo recibido de {name}',
     'toast.receiveError': '⚠️ Error al recibir el archivo',
     'toast.unlinked':     '🗑 {name} desvinculado',
@@ -1053,8 +1064,11 @@ const I18N = {
     'request.accept':     '✓ Accept',
     'request.reject':     'Reject',
 
-    'send.title':         'Send file',
-    'send.drop':          '<strong>Choose a file</strong><br>or drag it here',
+    'send.title':         'Send files',
+    'send.drop':          '<strong>Choose files</strong><br>or drag them here, folders too',
+    'send.folder':        '📁 Choose a folder',
+    'send.many':          '{n} files',
+    'send.zipNote':       'They will be sent together in a ZIP made on this device: {name}',
     'send.send':          'Send',
     'common.cancel':      'Cancel',
     'common.close':       'Close',
@@ -1078,6 +1092,8 @@ const I18N = {
     'toast.connectTimeout':'⚠️ Could not connect to the other device (is a firewall blocking WebRTC?)',
     'toast.stalled':      '⚠️ The transfer stopped making progress and was cancelled',
     'toast.noSpace':      '⚠️ Not enough space on the other device',
+    'toast.readError':    '⚠️ One of the files could not be read',
+    'toast.emptyFolder':  'The folder has no files',
     'toast.received':     '✅ File received from {name}',
     'toast.receiveError': '⚠️ Error receiving the file',
     'toast.unlinked':     '🗑 {name} unlinked',
@@ -1161,7 +1177,7 @@ let wsReady   = false;
 let connState = 'connecting'; // connecting | online | reconnecting | replaced
 let pendingPairRequest = null; // {id, name}
 let sendTarget = null; // deviceId of current send target
-let selectedFile = null;
+let selectedItems = []; // [{ file, path }] chosen in the send modal
 let receivedFiles = []; // [{name, size, blob, url}]
 let migratedIdentity = false; // true if old pairs were dropped by the identity upgrade
 
@@ -1479,7 +1495,51 @@ async function handleSignal(fromId, data) {
 // ═══════════════════════════════════════════════════════════════
 //  FILE SEND
 // ═══════════════════════════════════════════════════════════════
-async function sendFile(targetId, file) {
+// A single file is sent as it is. Several files or a folder are packed into
+// one ZIP here, while sending — never on the server, which only relays
+// signaling (docs/protocol.md §4).
+function sendFile(targetId, file) {
+  return sendItems(targetId, [{ file, path: file.name }]);
+}
+
+// items: [{ file, path }] — path is the name inside the ZIP ("dir/a.txt")
+function sendItems(targetId, items) {
+  const single = items.length === 1 && !items[0].path.includes('/');
+  return sendSource(targetId, single ? fileSource(items[0].file) : zipSource(items));
+}
+
+function fileSource(file) {
+  const counter = { n: 0 };
+  return {
+    meta: { v: 1, name: file.name, size: file.size, type: file.type || 'application/octet-stream' },
+    total: file.size,
+    read: () => counter.n,
+    chunks: () => readFileChunks(file, counter),
+  };
+}
+
+function zipSource(items) {
+  const counter = { n: 0 };
+  const total = items.reduce((n, it) => n + it.file.size, 0);
+  return {
+    meta: { v: 1, name: zipName(items), size: -1, type: 'application/zip', approx: total, items: items.length },
+    total,
+    read: () => counter.n,
+    chunks: () => zipStream(items, counter),
+  };
+}
+
+async function* readFileChunks(file, counter) {
+  const reader = file.stream().getReader();
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) return;
+    counter.n += value.byteLength;
+    yield value;
+  }
+}
+
+async function sendSource(targetId, src) {
   const tid = newTid();
   const tr = createTransfer(tid, targetId);
   const { pc } = tr;
@@ -1487,7 +1547,7 @@ async function sendFile(targetId, file) {
   dc.binaryType = 'arraybuffer';
   activeTid = tid;
 
-  openTransferModal('transfer.connecting', file.name);
+  openTransferModal('transfer.connecting', src.meta.name);
 
   let finished = false;
   let ackTimer = null;
@@ -1519,6 +1579,38 @@ async function sendFile(targetId, file) {
   tr.fail = (key) => finish(false, key);
 
   dc.bufferedAmountLowThreshold = 64 * 1024;
+  // Resolves when the channel can take more data (or is gone)
+  const drained = () => new Promise((resolve) => {
+    if (dc.bufferedAmount <= 256 * 1024 || dc.readyState !== 'open') return resolve();
+    dc.onbufferedamountlow = () => { dc.onbufferedamountlow = null; resolve(); };
+    const check = setInterval(() => { if (dc.readyState !== 'open') { clearInterval(check); resolve(); } }, 500);
+  });
+
+  async function stream() {
+    // Send metadata first
+    dc.send(JSON.stringify(src.meta));
+    let sent = 0;
+    for await (const chunk of src.chunks()) {
+      for (let off = 0; off < chunk.byteLength; off += CHUNK_SIZE) {
+        await drained();
+        if (finished || dc.readyState !== 'open') return;
+        const part = chunk.subarray(off, off + CHUNK_SIZE);
+        dc.send(part);
+        sent += part.byteLength;
+      }
+      lastProgress = Date.now();
+      const done = src.read();
+      const pct = src.total ? Math.min(100, Math.round((done / src.total) * 100)) : 100;
+      updateProgress(pct, `${pct}% — ${fmtBytes(done)} / ${fmtBytes(src.total)}`);
+    }
+    if (finished || dc.readyState !== 'open') return;
+    // Signal end; the size matters when it was not known upfront (ZIP)
+    dc.send(JSON.stringify({ __end: true, size: sent }));
+    streaming = false;
+    updateProgress(100, t('transfer.waitingAck'));
+    // A receiver older than protocol v1 never acks: treat silence as done
+    ackTimer = setTimeout(() => finish(true), ACK_TIMEOUT_MS);
+  }
 
   dc.onopen = () => {
     clearTimeout(openTimer);
@@ -1526,14 +1618,9 @@ async function sendFile(targetId, file) {
     streaming = true;
     lastProgress = Date.now();
     setTransferTitle('transfer.sending');
-    // Send metadata first
-    dc.send(JSON.stringify({ v: 1, name: file.name, size: file.size, type: file.type || 'application/octet-stream' }));
-    // Stream chunks, then wait for the receiver's ack
-    streamFile(dc, file, () => { lastProgress = Date.now(); }, () => {
-      streaming = false;
-      updateProgress(100, t('transfer.waitingAck'));
-      // A receiver older than protocol v1 never acks: treat silence as done
-      ackTimer = setTimeout(() => finish(true), ACK_TIMEOUT_MS);
+    stream().catch((err) => {
+      console.warn('send', err);
+      failTransfer(tid, 'toast.readError', { notify: true });
     });
   };
   dc.onmessage = (ev) => {
@@ -1550,39 +1637,178 @@ async function sendFile(targetId, file) {
   wsSend({ type: 'signal', to: targetId, data: { type: 'offer', sdp: offer.sdp, tid } });
 }
 
-function streamFile(dc, file, onProgress, onDone) {
-  let offset = 0;
-  const total = file.size;
+// ─── ZIP, written while sending ────────────────────────────────────────────
+// Streaming ZIP writer: data descriptors (sizes and CRC after each file),
+// ZIP64 past 4 GB, UTF-8 names. Deflate uses the browser's own
+// CompressionStream and is skipped for formats that are already compressed.
+const STORED_EXT = new Set(`jpg jpeg png gif webp heic heif avif jxl mp4 m4v mov mkv webm avi wmv mpg mpeg
+  mp3 m4a aac ogg oga opus flac wma zip gz tgz bz2 xz zst 7z rar lz lz4 br jar apk ipa deb rpm pkg dmg iso
+  msi whl war docx xlsx pptx odt ods odp epub pdf woff woff2`.split(/\s+/));
+const ZIP64_LIMIT = 0xFFFFFFFF - 16 * 1024 * 1024; // margin for deflate overhead
 
-  function sendNext() {
-    if (dc.readyState !== 'open') return;
-    if (offset >= total) {
-      // Signal end
-      dc.send(JSON.stringify({ __end: true }));
-      onDone();
-      return;
-    }
-
-    // Backpressure
-    if (dc.bufferedAmount > 256 * 1024) {
-      dc.onbufferedamountlow = () => { dc.onbufferedamountlow = null; sendNext(); };
-      return;
-    }
-
-    const slice = file.slice(offset, offset + CHUNK_SIZE);
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      if (dc.readyState !== 'open') return;
-      dc.send(e.target.result);
-      offset += e.target.result.byteLength;
-      onProgress();
-      const pct = Math.round((offset / total) * 100);
-      updateProgress(pct, `${pct}% — ${fmtBytes(offset)} / ${fmtBytes(total)}`);
-      sendNext();
-    };
-    reader.readAsArrayBuffer(slice);
+const CRC_TABLE = (() => {
+  const table = new Uint32Array(256);
+  for (let n = 0; n < 256; n++) {
+    let c = n;
+    for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1;
+    table[n] = c >>> 0;
   }
-  sendNext();
+  return table;
+})();
+
+function crc32(crc, bytes) {
+  crc = ~crc;
+  for (let i = 0; i < bytes.length; i++) crc = CRC_TABLE[(crc ^ bytes[i]) & 0xFF] ^ (crc >>> 8);
+  return ~crc >>> 0;
+}
+
+function zipName(items) {
+  const roots = new Set(items.map((it) => it.path.split('/')[0]));
+  if (roots.size === 1 && items.every((it) => it.path.includes('/'))) return `${[...roots][0]}.zip`;
+  const d = new Date(), p = (n) => String(n).padStart(2, '0');
+  return `fileswap-${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}.zip`;
+}
+
+function dosTime(ms) {
+  const d = new Date(Math.max(ms || Date.now(), Date.UTC(1980, 0, 2)));
+  return {
+    time: (d.getHours() << 11) | (d.getMinutes() << 5) | (d.getSeconds() >> 1),
+    date: ((d.getFullYear() - 1980) << 9) | ((d.getMonth() + 1) << 5) | d.getDate(),
+  };
+}
+
+function compressible(name) {
+  const ext = name.includes('.') ? name.split('.').pop().toLowerCase() : '';
+  return !STORED_EXT.has(ext) && typeof CompressionStream !== 'undefined';
+}
+
+// Makes the names inside the ZIP unique: "a.txt", "a (1).txt"…
+function uniqueZipPaths(items) {
+  const used = new Set();
+  return items.map((it) => {
+    let path = it.path.replace(/^\/+/, '').split('/').filter((s) => s && s !== '.' && s !== '..').join('/') || it.file.name;
+    if (used.has(path)) {
+      const m = path.match(/^(.*?)((?:\.tar)?\.[^./]+)?$/);
+      for (let i = 1; used.has(path); i++) path = `${m[1]} (${i})${m[2] || ''}`;
+    }
+    used.add(path);
+    return { file: it.file, path };
+  });
+}
+
+async function* zipStream(items, counter) {
+  const enc = new TextEncoder();
+  const central = [];
+  let offset = 0;
+  const emit = (bytes) => { offset += bytes.byteLength; return bytes; };
+
+  for (const { file, path } of uniqueZipPaths(items)) {
+    const name = enc.encode(path);
+    const deflate = compressible(path);
+    const zip64 = file.size >= ZIP64_LIMIT;
+    const { time, date } = dosTime(file.lastModified);
+    const start = offset;
+
+    const extra = zip64 ? 20 : 0;
+    const lh = new DataView(new ArrayBuffer(30 + name.length + extra));
+    lh.setUint32(0, 0x04034b50, true);
+    lh.setUint16(4, zip64 ? 45 : 20, true);
+    lh.setUint16(6, 0x0808, true);            // data descriptor + UTF-8 names
+    lh.setUint16(8, deflate ? 8 : 0, true);
+    lh.setUint16(10, time, true);
+    lh.setUint16(12, date, true);
+    if (zip64) { lh.setUint32(18, 0xFFFFFFFF, true); lh.setUint32(22, 0xFFFFFFFF, true); }
+    lh.setUint16(26, name.length, true);
+    lh.setUint16(28, extra, true);
+    new Uint8Array(lh.buffer).set(name, 30);
+    if (zip64) { lh.setUint16(30 + name.length, 1, true); lh.setUint16(32 + name.length, 16, true); }
+    yield emit(new Uint8Array(lh.buffer));
+
+    let crc = 0, usize = 0, csize = 0;
+    let data = file.stream().pipeThrough(new TransformStream({
+      transform(chunk, ctl) {
+        crc = crc32(crc, chunk);
+        usize += chunk.byteLength;
+        counter.n += chunk.byteLength;
+        ctl.enqueue(chunk);
+      },
+    }));
+    if (deflate) data = data.pipeThrough(new CompressionStream('deflate-raw'));
+    const reader = data.getReader();
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      csize += value.byteLength;
+      yield emit(value);
+    }
+    if (usize !== file.size) throw new Error(`${path} changed while sending`);
+
+    const dd = new DataView(new ArrayBuffer(zip64 ? 24 : 16));
+    dd.setUint32(0, 0x08074b50, true);
+    dd.setUint32(4, crc, true);
+    if (zip64) { dd.setBigUint64(8, BigInt(csize), true); dd.setBigUint64(16, BigInt(usize), true); }
+    else { dd.setUint32(8, csize, true); dd.setUint32(12, usize, true); }
+    yield emit(new Uint8Array(dd.buffer));
+    central.push({ name, deflate, zip64, time, date, crc, csize, usize, start });
+  }
+
+  // Central directory
+  const cdStart = offset;
+  for (const e of central) {
+    // Sizes go in the ZIP64 extra when the local header used it, so readers
+    // expect the 8-byte data descriptor that was written
+    const big = [e.zip64 || e.usize >= 0xFFFFFFFF, e.zip64 || e.csize >= 0xFFFFFFFF, e.start >= 0xFFFFFFFF];
+    const extra = big.some(Boolean) ? 4 + 8 * big.filter(Boolean).length : 0;
+    const ch = new DataView(new ArrayBuffer(46 + e.name.length + extra));
+    ch.setUint32(0, 0x02014b50, true);
+    ch.setUint16(4, 0x0300 | 45, true);       // made by Unix, ZIP 4.5
+    ch.setUint16(6, extra ? 45 : 20, true);
+    ch.setUint16(8, 0x0808, true);
+    ch.setUint16(10, e.deflate ? 8 : 0, true);
+    ch.setUint16(12, e.time, true);
+    ch.setUint16(14, e.date, true);
+    ch.setUint32(16, e.crc, true);
+    ch.setUint32(20, big[1] ? 0xFFFFFFFF : e.csize, true);
+    ch.setUint32(24, big[0] ? 0xFFFFFFFF : e.usize, true);
+    ch.setUint16(28, e.name.length, true);
+    ch.setUint16(30, extra, true);
+    ch.setUint32(38, (0o100644 << 16) >>> 0, true); // regular file, rw-r--r--
+    ch.setUint32(42, big[2] ? 0xFFFFFFFF : e.start, true);
+    new Uint8Array(ch.buffer).set(e.name, 46);
+    if (extra) {
+      let p = 46 + e.name.length;
+      ch.setUint16(p, 1, true); ch.setUint16(p + 2, extra - 4, true); p += 4;
+      for (const [isBig, v] of [[big[0], e.usize], [big[1], e.csize], [big[2], e.start]]) {
+        if (isBig) { ch.setBigUint64(p, BigInt(v), true); p += 8; }
+      }
+    }
+    yield emit(new Uint8Array(ch.buffer));
+  }
+  const cdSize = offset - cdStart;
+  const needs64 = central.length >= 0xFFFF || cdStart >= 0xFFFFFFFF || cdSize >= 0xFFFFFFFF;
+  if (needs64) {
+    const z64Start = offset;
+    const z = new DataView(new ArrayBuffer(56 + 20));
+    z.setUint32(0, 0x06064b50, true);
+    z.setBigUint64(4, 44n, true);
+    z.setUint16(12, 45, true);
+    z.setUint16(14, 45, true);
+    z.setBigUint64(24, BigInt(central.length), true);
+    z.setBigUint64(32, BigInt(central.length), true);
+    z.setBigUint64(40, BigInt(cdSize), true);
+    z.setBigUint64(48, BigInt(cdStart), true);
+    z.setUint32(56, 0x07064b50, true);          // ZIP64 end of central directory locator
+    z.setBigUint64(64, BigInt(z64Start), true);
+    z.setUint32(72, 1, true);
+    yield emit(new Uint8Array(z.buffer));
+  }
+  const eocd = new DataView(new ArrayBuffer(22));
+  eocd.setUint32(0, 0x06054b50, true);
+  eocd.setUint16(8, Math.min(central.length, 0xFFFF), true);
+  eocd.setUint16(10, Math.min(central.length, 0xFFFF), true);
+  eocd.setUint32(12, needs64 ? 0xFFFFFFFF : cdSize, true);
+  eocd.setUint32(16, needs64 ? 0xFFFFFFFF : cdStart, true);
+  yield emit(new Uint8Array(eocd.buffer));
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -1631,7 +1857,9 @@ function setupReceiveChannel(dc, fromId, tid) {
     if (activeTid === tid) activeTid = null;
     const blob = new Blob(buffers, { type: meta.type });
     buffers = [];
-    let ok = received === meta.size;
+    // A ZIP built while sending announces size -1; the end frame has the real one
+    const expected = meta.size >= 0 ? meta.size : end.size;
+    let ok = received === expected && (end.size === undefined || end.size === received);
     let error = ok ? undefined : 'SIZE_MISMATCH';
     let hash = null;
     if (ok) {
@@ -1648,7 +1876,7 @@ function setupReceiveChannel(dc, fromId, tid) {
 
     closeModal('transfer-modal');
     if (ok) {
-      addReceivedFile({ name: meta.name, size: meta.size, blob, url: URL.createObjectURL(blob) });
+      addReceivedFile({ name: meta.name, size: received, blob, url: URL.createObjectURL(blob) });
       toast(t('toast.received', { name: fromName }));
     } else {
       toast(t('toast.receiveError'));
@@ -1668,16 +1896,26 @@ function setupReceiveChannel(dc, fromId, tid) {
         return;
       }
       // Metadata frame
-      if (meta || typeof parsed.name !== 'string' || !Number.isSafeInteger(parsed.size) || parsed.size < 0) return;
-      meta = { name: parsed.name, size: parsed.size, type: typeof parsed.type === 'string' ? parsed.type : 'application/octet-stream' };
+      if (meta || typeof parsed.name !== 'string' || !Number.isSafeInteger(parsed.size) || parsed.size < -1) return;
+      meta = {
+        name: parsed.name, size: parsed.size,
+        approx: Number.isSafeInteger(parsed.approx) && parsed.approx > 0 ? parsed.approx : 0,
+        type: typeof parsed.type === 'string' ? parsed.type : 'application/octet-stream',
+      };
       activeTid = tid;
       openTransferModal('transfer.receiving', meta.name);
     } else if (meta) {
       // Binary chunk
       buffers.push(ev.data);
       received += ev.data.byteLength;
-      const pct = meta.size ? Math.min(100, Math.round((received / meta.size) * 100)) : 100;
-      updateProgress(pct, `${pct}% — ${fmtBytes(received)} / ${fmtBytes(meta.size)}`);
+      if (meta.size >= 0) {
+        const pct = meta.size ? Math.min(100, Math.round((received / meta.size) * 100)) : 100;
+        updateProgress(pct, `${pct}% — ${fmtBytes(received)} / ${fmtBytes(meta.size)}`);
+      } else {
+        // ZIP: only an estimate (the files' size) is known until the end
+        const pct = meta.approx ? Math.min(99, Math.round((received / meta.approx) * 100)) : 0;
+        updateProgress(pct, meta.approx ? `${fmtBytes(received)} / ~${fmtBytes(meta.approx)}` : fmtBytes(received));
+      }
     }
   };
   dc.onclose = () => fail('toast.connLost');
@@ -1854,12 +2092,9 @@ function showQRModal() {
 
 // ─── Send Modal ───────────────────────────────────────────────────────────
 function openSendModal(targetId, targetName) {
-  sendTarget   = targetId;
-  selectedFile = null;
+  sendTarget = targetId;
   document.getElementById('send-target-name').textContent = targetName;
-  document.getElementById('selected-file').classList.remove('visible');
-  document.getElementById('send-btn').disabled = true;
-  document.getElementById('file-input').value  = '';
+  clearSelection();
   openModal('send-modal');
 }
 
@@ -2255,41 +2490,85 @@ document.getElementById('pair-reject-btn').addEventListener('click', () => {
 });
 
 // File selection
-const dropZone  = document.getElementById('drop-zone');
-const fileInput = document.getElementById('file-input');
+const dropZone    = document.getElementById('drop-zone');
+const fileInput   = document.getElementById('file-input');
+const folderInput = document.getElementById('folder-input');
+
+const itemsFromFiles = (files) => [...files].map((f) => ({ file: f, path: f.webkitRelativePath || f.name }));
 
 dropZone.addEventListener('click', () => fileInput.click());
+document.getElementById('folder-btn').addEventListener('click', (e) => { e.stopPropagation(); folderInput.click(); });
 fileInput.addEventListener('change', () => {
-  if (fileInput.files[0]) setSelectedFile(fileInput.files[0]);
+  if (fileInput.files.length) setSelectedItems(itemsFromFiles(fileInput.files));
+});
+folderInput.addEventListener('change', () => {
+  if (folderInput.files.length) setSelectedItems(itemsFromFiles(folderInput.files));
 });
 
 dropZone.addEventListener('dragover',  (e) => { e.preventDefault(); dropZone.classList.add('drag-over'); });
 dropZone.addEventListener('dragleave', ()  => dropZone.classList.remove('drag-over'));
-dropZone.addEventListener('drop', (e) => {
+dropZone.addEventListener('drop', async (e) => {
   e.preventDefault(); dropZone.classList.remove('drag-over');
-  if (e.dataTransfer.files[0]) setSelectedFile(e.dataTransfer.files[0]);
+  // Folders can only be read through the entries API
+  const entries = [...(e.dataTransfer.items || [])].map((it) => it.webkitGetAsEntry?.()).filter(Boolean);
+  let items = [];
+  try {
+    if (entries.length) for (const entry of entries) items.push(...await readEntry(entry, ''));
+    else items = itemsFromFiles(e.dataTransfer.files);
+  } catch (err) {
+    console.warn('drop', err);
+    toast(t('toast.readError'));
+    return;
+  }
+  if (items.length) setSelectedItems(items);
+  else toast(t('toast.emptyFolder'));
 });
 
-function setSelectedFile(file) {
-  selectedFile = file;
-  document.getElementById('selected-icon').textContent = fileEmoji(file.name);
-  document.getElementById('selected-name').textContent = file.name;
-  document.getElementById('selected-size').textContent = fmtBytes(file.size);
+async function readEntry(entry, prefix) {
+  if (entry.isFile) {
+    const file = await new Promise((res, rej) => entry.file(res, rej));
+    return [{ file, path: prefix + file.name }];
+  }
+  if (!entry.isDirectory) return [];
+  const reader = entry.createReader();
+  const children = [];
+  for (;;) {
+    // readEntries returns the directory in batches until it returns none
+    const batch = await new Promise((res, rej) => reader.readEntries(res, rej));
+    if (!batch.length) break;
+    children.push(...batch);
+  }
+  const out = [];
+  for (const child of children) out.push(...await readEntry(child, `${prefix}${entry.name}/`));
+  return out;
+}
+
+function setSelectedItems(items) {
+  selectedItems = items;
+  const total = items.reduce((n, it) => n + it.file.size, 0);
+  const single = items.length === 1 && !items[0].path.includes('/');
+  document.getElementById('selected-icon').textContent = single ? fileEmoji(items[0].file.name) : '🗜️';
+  document.getElementById('selected-name').textContent = single ? items[0].file.name : t('send.many', { n: items.length });
+  document.getElementById('selected-size').textContent = fmtBytes(total);
+  document.getElementById('selected-note').textContent = single ? '' : t('send.zipNote', { name: zipName(items) });
   document.getElementById('selected-file').classList.add('visible');
   document.getElementById('send-btn').disabled = false;
 }
 
-document.getElementById('clear-file-btn').addEventListener('click', () => {
-  selectedFile = null;
+function clearSelection() {
+  selectedItems = [];
   fileInput.value = '';
+  folderInput.value = '';
   document.getElementById('selected-file').classList.remove('visible');
   document.getElementById('send-btn').disabled = true;
-});
+}
+
+document.getElementById('clear-file-btn').addEventListener('click', clearSelection);
 
 document.getElementById('send-btn').addEventListener('click', () => {
-  if (!selectedFile || !sendTarget) return;
+  if (!selectedItems.length || !sendTarget) return;
   closeModal('send-modal');
-  sendFile(sendTarget, selectedFile);
+  sendItems(sendTarget, selectedItems);
 });
 
 document.getElementById('send-cancel-btn').addEventListener('click', () => closeModal('send-modal'));
