@@ -22,7 +22,13 @@ If a paired device is offline (grey indicator), sending is blocked — there is 
 
 Each device also has a **clipboard**: texts (links, commands, notes) and files that its paired devices can see, copy and download while it is online — items last 24 h, up to 500 MB, and the last list seen stays visible (greyed out) while the device is offline.
 
-There is also a **command-line node** for Linux servers — see [FileSwap CLI](#fileswap-cli-for-servers) below.
+There is also a **command-line node** for Linux servers — see [FileSwap CLI](#fileswap-cli-for-servers) below. Install it with:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/SethSterling22/SwapFile/main/fileswap-cli/install.sh | sh
+```
+
+and follow the [CLI install guide](docs/install-cli.md).
 
 The interface is available in **Spanish and English**. It follows the browser's language (any `es-*` → Spanish, otherwise English) until the user picks one with the **ES/EN** button in the header; the choice is saved per browser. Light/dark mode works the same way with the ☾/☀ button.
 
@@ -102,6 +108,7 @@ Sender                    Server                  Receiver
 
 ```
 docs/
+├── install-cli.md          # Step-by-step CLI install guide (also linked from every release)
 └── protocol.md             # Signaling + transfer protocol shared by web and CLI
 fileswap-cli/               # Command-line node for Linux servers (Go) — see its README
 fileswap/
@@ -187,7 +194,7 @@ Install or update it with one command (Debian/Ubuntu, Arch or any Linux, amd64/a
 curl -fsSL https://raw.githubusercontent.com/SethSterling22/SwapFile/main/fileswap-cli/install.sh | sh
 ```
 
-`.deb`, Arch packages and plain binaries are also on [GitHub Releases](https://github.com/SethSterling22/SwapFile/releases) — see [Install](fileswap-cli/README.md#install) for manual commands. It is in early development; see its [roadmap](fileswap-cli/README.md#roadmap). The web app's transfers can be cancelled from either side, and fail fast (with a reason) when the other device disconnects, stops making progress or has no space.
+`.deb`, Arch packages and plain binaries are also on [GitHub Releases](https://github.com/SethSterling22/SwapFile/releases) (every release starts with these install commands) — see the [install guide](docs/install-cli.md) and the CLI README's [Install](fileswap-cli/README.md#install) for manual commands. It is in early development; see its [roadmap](fileswap-cli/README.md#roadmap). The web app's transfers can be cancelled from either side, and fail fast (with a reason) when the other device disconnects, stops making progress or has no space.
 
 ---
 
