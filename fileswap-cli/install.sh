@@ -7,8 +7,9 @@
 # It picks the package for this system — .deb (Debian, Ubuntu…), Arch
 # package (pacman), or the plain binary in /usr/local/bin elsewhere —,
 # checks it against the release's SHA256SUMS, installs it with sudo when
-# needed, deletes the download, and restarts the fileswap user service if
-# it is running. Re-run it to update.
+# needed, deletes the download, removes older fileswap binaries left in
+# PATH, and restarts the fileswap user service if it is running. Re-run it
+# to update.
 set -eu
 
 REPO="SethSterling22/SwapFile"
@@ -91,13 +92,42 @@ if [ -n "$SUMS" ] && have sha256sum; then
 fi
 
 case "$KIND" in
-deb) $SUDO apt-get install -y -q --allow-downgrades "$TMP/$FILE" ;;
-pacman) $SUDO pacman -U --noconfirm "$TMP/$FILE" ;;
+deb) $SUDO apt-get install -y -q --allow-downgrades "$TMP/$FILE"; TARGET=/usr/bin/fileswap ;;
+pacman) $SUDO pacman -U --noconfirm "$TMP/$FILE"; TARGET=/usr/bin/fileswap ;;
 binary)
 	tar -xzf "$TMP/$FILE" -C "$TMP"
 	$SUDO install -m 755 "$TMP"/fileswap_*/fileswap /usr/local/bin/fileswap
+	TARGET=/usr/local/bin/fileswap
 	;;
 esac
+
+# Older FileSwap binaries elsewhere in PATH (e.g. copied by hand into
+# /usr/local/bin or ~/.local/bin) are removed: they would shadow the one just
+# installed, or linger as stale versions. Anything else named fileswap that
+# comes before it in PATH is only reported.
+TARGET_REAL=$(readlink -f "$TARGET")
+SEEN=""
+BEFORE=1
+OLD_IFS=$IFS
+IFS=:
+for dir in $PATH; do
+	f="$dir/fileswap"
+	[ -n "$dir" ] && [ -f "$f" ] || continue
+	real=$(readlink -f "$f")
+	case " $SEEN " in *" $real "*) continue ;; esac
+	SEEN="$SEEN $real"
+	if [ "$real" = "$TARGET_REAL" ]; then
+		BEFORE=0
+		continue
+	fi
+	if "$f" --version 2>/dev/null | grep -q '^fileswap '; then
+		if [ -w "$dir" ]; then rm -f "$f"; else $SUDO rm -f "$f"; fi
+		say "Removed an older copy: $f"
+	elif [ "$BEFORE" = 1 ]; then
+		say "Warning: $f is not FileSwap but comes before $TARGET in PATH; rename or remove it" >&2
+	fi
+done
+IFS=$OLD_IFS
 
 # The service keeps running the old binary until it is restarted
 if [ "$(id -u)" -ne 0 ] && systemctl --user is-active --quiet fileswap 2>/dev/null; then
@@ -105,5 +135,5 @@ if [ "$(id -u)" -ne 0 ] && systemctl --user is-active --quiet fileswap 2>/dev/nu
 fi
 
 say ""
-say "Installed $(fileswap --version 2>/dev/null || echo "fileswap $TAG")."
+say "Installed $("$TARGET" --version 2>/dev/null || echo "fileswap $TAG") in $TARGET."
 say "Next: fileswap init --name <name> --server <host>:7341   (once), then: fileswap start"
