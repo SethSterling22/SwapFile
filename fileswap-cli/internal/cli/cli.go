@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"os"
 	"strings"
 
 	"github.com/SethSterling22/SwapFile/fileswap-cli/internal/identity"
@@ -62,6 +63,16 @@ func (e *errUsage) Error() string { return e.msg }
 
 // Run executes the command line and returns the process exit code.
 func Run(args []string, version string, out, errOut io.Writer) int {
+	code := runCommand(args, version, out, errOut)
+	// On a terminal, leave a blank line after the output so the next
+	// prompt does not stick to it. Pipes and logs get no extra line.
+	if f, ok := out.(*os.File); ok && isTerminal(f) {
+		fmt.Fprintln(out)
+	}
+	return code
+}
+
+func runCommand(args []string, version string, out, errOut io.Writer) int {
 	e := &env{version: version, out: out, errOut: errOut}
 
 	// Global options come before the command.
