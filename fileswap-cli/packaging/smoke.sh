@@ -4,6 +4,8 @@
 set -eu
 cd "$(dirname "$0")/.."
 
+# Expanded inside the containers, not here
+# shellcheck disable=SC2016
 CHECK='fileswap --version && fileswap --help | grep -q tfr \
   && fileswap init --name smoke --server 127.0.0.1:7341 | grep -q "ws://127.0.0.1:7341/ws" \
   && fileswap id | grep -Eq "[0-9a-f]{8}-[0-9a-f]{4}-" \

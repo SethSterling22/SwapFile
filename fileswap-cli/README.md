@@ -14,28 +14,38 @@ The CLI is a FileSwap device like any browser tab: it has a name and a **device 
 
 ## Install
 
-Download from the [latest release](https://github.com/SethSterling22/SwapFile/releases/latest) (`amd64` = x86_64, `arm64` = aarch64).
-
-**Debian / Ubuntu**
+**One command** — Debian/Ubuntu, Arch, or any other Linux (amd64 or arm64):
 
 ```bash
-sudo apt install ./fileswap_<version>_amd64.deb
+curl -fsSL https://raw.githubusercontent.com/SethSterling22/SwapFile/main/fileswap-cli/install.sh | sh
 ```
 
-**Arch Linux**
+It picks the right package (`.deb` with apt, the Arch package with pacman, or the plain binary in `/usr/local/bin` elsewhere), checks it against the release's `SHA256SUMS`, installs it with `sudo`, **deletes the download**, and restarts the `fileswap` service if it is running. Run the same command again to **update**. A specific version: `… | sh -s -- --version v0.8.0-alpha.1`. To read the script first: `curl -fsSL …/install.sh -o install.sh && less install.sh && sh install.sh`.
+
+**Manually** — download into `/tmp`, install, delete (replace the version with the one you want from [Releases](https://github.com/SethSterling22/SwapFile/releases)):
 
 ```bash
-sudo pacman -U fileswap-<version>-1-x86_64.pkg.tar.zst
+# Debian / Ubuntu
+cd /tmp && wget https://github.com/SethSterling22/SwapFile/releases/download/v0.8.0-alpha.1/fileswap_0.8.0.alpha.1_amd64.deb && sudo apt install ./fileswap_0.8.0.alpha.1_amd64.deb && rm fileswap_0.8.0.alpha.1_amd64.deb
+
+# Arch Linux
+cd /tmp && curl -LO https://github.com/SethSterling22/SwapFile/releases/download/v0.8.0-alpha.1/fileswap-0.8.0alpha.1-1-x86_64.pkg.tar.zst && sudo pacman -U fileswap-0.8.0alpha.1-1-x86_64.pkg.tar.zst && rm fileswap-0.8.0alpha.1-1-x86_64.pkg.tar.zst
+
+# Any Linux (plain binary)
+cd /tmp && curl -LO https://github.com/SethSterling22/SwapFile/releases/download/v0.8.0-alpha.1/fileswap_0.8.0-alpha.1_linux_amd64.tar.gz && tar xzf fileswap_0.8.0-alpha.1_linux_amd64.tar.gz && sudo install -m 755 fileswap_0.8.0-alpha.1_linux_amd64/fileswap /usr/local/bin/ && rm -r fileswap_0.8.0-alpha.1_linux_amd64*
 ```
 
-**Any Linux (plain binary)**
+Download into `/tmp` rather than your home folder: apt reads local packages as its `_apt` user, which cannot enter `~` (and otherwise prints a harmless "couldn't be accessed by user '_apt'" notice).
+
+Every release keeps its versioned files and, from v0.8.1 on, also has **version-less copies** — `fileswap_amd64.deb`, `fileswap-x86_64.pkg.tar.zst`, `fileswap_linux_amd64.tar.gz` (and the `arm64`/`aarch64` ones) — so the newest *stable* release can always be downloaded from the same address:
 
 ```bash
-tar xzf fileswap_<version>_linux_amd64.tar.gz
-sudo install -m 755 fileswap /usr/local/bin/
+cd /tmp && wget https://github.com/SethSterling22/SwapFile/releases/latest/download/fileswap_amd64.deb && sudo apt install ./fileswap_amd64.deb && rm fileswap_amd64.deb
 ```
 
-Each release also has `SHA256SUMS` to check the downloads: `sha256sum -c SHA256SUMS --ignore-missing`.
+(GitHub's `releases/latest` skips pre-releases such as `v0.8.1-alpha.1`; the install script does not.) Each release also has `SHA256SUMS` and `install.sh`.
+
+**Uninstall:** `sudo apt remove fileswap`, `sudo pacman -R fileswap`, or `sudo rm /usr/local/bin/fileswap` — plus `fileswap service remove` first if you installed the service. Your identity (`~/.config/fileswap`), received files (`~/FileSwap`) and log (`~/.local/state/fileswap`) are left in place.
 
 ---
 
