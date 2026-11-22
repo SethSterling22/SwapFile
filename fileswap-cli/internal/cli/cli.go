@@ -50,6 +50,7 @@ var commands = map[string]command{
 	"listen":  {runListen},
 	"stop":    {runStop},
 	"service": {runService},
+	"clip":    {runClip},
 	"status":  {runStatus},
 	"unpair":  {runUnpair},
 	"version": {runVersion},

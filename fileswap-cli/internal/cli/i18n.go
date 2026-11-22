@@ -51,6 +51,7 @@ Commands:
   status                                     Show whether it is online, and the paired devices
   stop                                       Go offline
   service  install|remove                    Run it as a systemd user service (starts at login/boot)
+  clip     add|ls|get|rm                     Clipboard: texts and files paired devices can see and take
   allow    <code>                            Accept pairing from this device without asking
   tfr      <node> <path>...                  Send files or folders to a paired device (several → one ZIP) (alias: -tfr, send)
   version                                    Print the version
@@ -123,6 +124,48 @@ it in the browser, or ` + "`fileswap allow <code>`" + ` first.
 Check it with ` + "`fileswap status`" + `; stop it with ` + "`fileswap stop`" + `.
 `,
 		"help.listen": "Usage: fileswap listen [--dir <path>]\n\nSame as `fileswap start --foreground`: online in this terminal, with the events\non screen and questions about new pairings. Ctrl+C to stop.\n",
+		"help.clip": `Usage: fileswap clip <command>
+
+Every node has a clipboard: items with a text (a link, a command, a note),
+an attached file, or both, that paired devices can see and take while the
+node is online. Items never replace each other; each one is deleted after
+24 h, and a clipboard holds up to 500 MB. Here it is the Clipboard folder
+inside the swap folder (~/FileSwap/Clipboard): files copied there by hand
+are shared too.
+
+  clip add [-t <text>] [<file>]   Add an item (text from stdin with -t - or a pipe)
+  clip ls                         This node's clipboard
+  clip ls <node>                  Another device's clipboard (the last one seen when it is offline)
+  clip get <node> <id> [--dir <path>]
+                                  Take an item: prints its text, saves its file in the swap folder
+  clip rm <id>|all                Remove items from this node's clipboard
+
+Lists and files travel straight between the devices, never through the server.
+`,
+		"clip.added":        "Added to the clipboard as %s (expires in %s):",
+		"clip.notOnline":    "Paired devices can see it while this node is online: fileswap start",
+		"clip.removed":      "Removed %d item(s).",
+		"clip.mine":         "My clipboard",
+		"clip.theirs":       "%s's clipboard",
+		"clip.usage":        "%d items · %s of %s",
+		"clip.seen":         "last seen %s ago",
+		"clip.justNow":      "a moment",
+		"clip.offlineNote":  "Offline: texts can be read, but files can't be taken until it comes back.",
+		"clip.colID":        "ID",
+		"clip.colExpires":   "EXPIRES",
+		"clip.colContent":   "CONTENT",
+		"clip.empty":        "Empty. Add something with fileswap clip add -t \"text\" [file]",
+		"clip.getting":      "Taking %s (%s)…",
+		"clip.saved":        "Saved %s (%s) — SHA-256 %s… verified",
+		"clip.dirIgnored":   "(--dir ignored: the running node saves into its own swap folder)",
+		"clip.errEmpty":     "an item needs a text (-t), a file, or both",
+		"clip.errTooLong":   "the text is longer than %d KB",
+		"clip.errFull":      "the clipboard is full (%s or %d items); remove something with fileswap clip rm",
+		"clip.errNotFound":  "no clipboard item with that id",
+		"clip.errAmbiguous": "several items start with that id; use more characters",
+		"nerr.NO_CLIPBOARD": "%s does not share a clipboard right now",
+		"nerr.NOT_FOUND":    "no paired device matches %q",
+		"nerr.NO_ITEM":      "%s has no such clipboard item with a file",
 		"help.service": `Usage: fileswap service install|remove
 
 install   Writes a systemd user unit (~/.config/systemd/user/fileswap.service)
@@ -161,7 +204,6 @@ Log: journalctl --user -u fileswap -f. ` + "`status`" + ` and ` + "`stop`" + ` w
 		"nerr.REJECTED":          "the other device rejected the pairing",
 		"nerr.SELF":              "that is this node's own code",
 		"nerr.ALREADY_PAIRED":    "already paired with %s",
-		"nerr.NOT_FOUND":         "no paired device matches %q",
 		"nerr.AMBIGUOUS":         "%q matches several paired devices; use more of the code",
 		"nerr.BUSY":              "another pairing request is already waiting for an answer",
 		"nerr.REPLACED":          "this identity connected from somewhere else (another `start` or command), so this one went offline",
@@ -269,6 +311,8 @@ Log: journalctl --user -u fileswap -f. ` + "`status`" + ` and ` + "`stop`" + ` w
 		"log.sent":              "Sent %s (%s) to %s — SHA-256 %s… verified",
 		"log.sendFailed":        "Could not send %s to %s: %s",
 		"log.sendCancelled":     "Cancelled sending %s to %s",
+		"log.clipListed":        "%s looked at the clipboard (%d items)",
+		"log.clipRequested":     "%s is taking %s from the clipboard",
 	},
 	"es": {
 		"usage": `fileswap — envía archivos entre navegadores y servidores Linux, de igual a igual
@@ -287,6 +331,7 @@ Comandos:
   status                                     Indica si está en línea y muestra los dispositivos vinculados
   stop                                       Se desconecta
   service  install|remove                    Lo instala como servicio de usuario de systemd (arranca al iniciar)
+  clip     add|ls|get|rm                     Clipboard: textos y archivos que los vinculados pueden ver y tomar
   allow    <código>                          Acepta la vinculación de ese dispositivo sin preguntar
   tfr      <nodo> <ruta>...                  Envía archivos o carpetas a un dispositivo vinculado (varios → un ZIP) (alias: -tfr, send)
   version                                    Muestra la versión
@@ -361,6 +406,48 @@ en la lista de permitidos. Para vincular uno nuevo, ejecuta
 Revísalo con ` + "`fileswap status`" + `; detenlo con ` + "`fileswap stop`" + `.
 `,
 		"help.listen": "Uso: fileswap listen [--dir <ruta>]\n\nIgual que `fileswap start --foreground`: en línea en esta terminal, con los\neventos en pantalla y preguntas sobre vinculaciones nuevas. Ctrl+C para salir.\n",
+		"help.clip": `Uso: fileswap clip <comando>
+
+Cada nodo tiene un clipboard: elementos con un texto (un enlace, un comando,
+una nota), un archivo adjunto, o ambos, que los dispositivos vinculados
+pueden ver y tomar mientras el nodo está en línea. Los elementos nunca se
+reemplazan entre sí; cada uno se borra a las 24 h, y un clipboard guarda
+hasta 500 MB. Aquí es la carpeta Clipboard dentro de la carpeta de swap
+(~/FileSwap/Clipboard): los archivos copiados ahí a mano también se comparten.
+
+  clip add [-t <texto>] [<archivo>]   Añade un elemento (texto desde stdin con -t - o una tubería)
+  clip ls                             El clipboard de este nodo
+  clip ls <nodo>                      El clipboard de otro dispositivo (el último visto si está desconectado)
+  clip get <nodo> <id> [--dir <ruta>]
+                                      Toma un elemento: muestra su texto y guarda su archivo en la carpeta de swap
+  clip rm <id>|all                    Quita elementos del clipboard de este nodo
+
+Las listas y los archivos viajan directamente entre los dispositivos, nunca por el servidor.
+`,
+		"clip.added":        "Añadido al clipboard como %s (vence en %s):",
+		"clip.notOnline":    "Los dispositivos vinculados lo verán mientras este nodo esté en línea: fileswap start",
+		"clip.removed":      "%d elemento(s) quitado(s).",
+		"clip.mine":         "Mi clipboard",
+		"clip.theirs":       "Clipboard de %s",
+		"clip.usage":        "%d elementos · %s de %s",
+		"clip.seen":         "visto por última vez hace %s",
+		"clip.justNow":      "un momento",
+		"clip.offlineNote":  "Sin conexión: los textos se pueden leer, pero los archivos no se pueden tomar hasta que vuelva.",
+		"clip.colID":        "ID",
+		"clip.colExpires":   "VENCE EN",
+		"clip.colContent":   "CONTENIDO",
+		"clip.empty":        "Vacío. Añade algo con fileswap clip add -t \"texto\" [archivo]",
+		"clip.getting":      "Tomando %s (%s)…",
+		"clip.saved":        "Guardado %s (%s); SHA-256 %s… verificado",
+		"clip.dirIgnored":   "(--dir ignorado: el nodo en marcha guarda en su propia carpeta de swap)",
+		"clip.errEmpty":     "un elemento necesita un texto (-t), un archivo, o ambos",
+		"clip.errTooLong":   "el texto ocupa más de %d KB",
+		"clip.errFull":      "el clipboard está lleno (%s o %d elementos); quita algo con fileswap clip rm",
+		"clip.errNotFound":  "no hay ningún elemento del clipboard con ese id",
+		"clip.errAmbiguous": "varios elementos empiezan con ese id; usa más caracteres",
+		"nerr.NO_CLIPBOARD": "%s no comparte un clipboard ahora mismo",
+		"nerr.NOT_FOUND":    "ningún dispositivo vinculado coincide con %q",
+		"nerr.NO_ITEM":      "%s no tiene ese elemento con archivo en su clipboard",
 		"help.service": `Uso: fileswap service install|remove
 
 install   Escribe una unidad de usuario de systemd (~/.config/systemd/user/fileswap.service)
@@ -399,7 +486,6 @@ Registro: journalctl --user -u fileswap -f. ` + "`status`" + ` y ` + "`stop`" + 
 		"nerr.REJECTED":          "el otro dispositivo rechazó la vinculación",
 		"nerr.SELF":              "ese es el código de este mismo nodo",
 		"nerr.ALREADY_PAIRED":    "ya estás vinculado con %s",
-		"nerr.NOT_FOUND":         "ningún dispositivo vinculado coincide con %q",
 		"nerr.AMBIGUOUS":         "%q coincide con varios dispositivos vinculados; usa más caracteres del código",
 		"nerr.BUSY":              "ya hay otra solicitud de vinculación esperando respuesta",
 		"nerr.REPLACED":          "esta identidad se conectó desde otro lugar (otro `start` u otro comando), así que esta se desconectó",
@@ -507,5 +593,7 @@ Registro: journalctl --user -u fileswap -f. ` + "`status`" + ` y ` + "`stop`" + 
 		"log.sent":              "%s (%s) enviado a %s; SHA-256 %s… verificado",
 		"log.sendFailed":        "No se pudo enviar %s a %s: %s",
 		"log.sendCancelled":     "Envío de %s a %s cancelado",
+		"log.clipListed":        "%s miró el clipboard (%d elementos)",
+		"log.clipRequested":     "%s está tomando %s del clipboard",
 	},
 }

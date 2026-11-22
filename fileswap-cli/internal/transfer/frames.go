@@ -31,6 +31,9 @@ type Meta struct {
 	Approx int64 `json:"approx,omitempty"`
 	// Items is the number of files inside an archive (informative).
 	Items int `json:"items,omitempty"`
+	// Clip is set when the file is a clipboard attachment sent because the
+	// receiver asked for it: the clipboard item id.
+	Clip string `json:"clip,omitempty"`
 }
 
 // End is sent after the last chunk. Size is the total sent (required when

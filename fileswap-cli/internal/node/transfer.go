@@ -86,6 +86,8 @@ func (n *Node) onSignal(m signaling.Msg) {
 		if x != nil {
 			x.stop(CodePeerAborted + ":" + s.Reason)
 		}
+	case s.Type == "offer" && x == nil && s.Kind == "clip":
+		n.acceptClip(from, s)
 	case s.Type == "offer" && x == nil:
 		n.acceptOffer(from, s)
 	case x != nil:
@@ -152,6 +154,9 @@ func (n *Node) acceptOffer(from string, s peer.Signal) {
 		dc.OnMessage(func(msg webrtc.DataChannelMessage) {
 			if r.Meta() == nil && msg.IsString {
 				defer func() {
+					if m := r.Meta(); m != nil && m.Clip != "" {
+						n.clipStarted(from, m.Clip)
+					}
 					if m := r.Meta(); m != nil && m.Size == transfer.UnknownSize {
 						n.opts.Log("receivingZip", m.Name, m.Items, fmtBytes(m.Approx), n.peerName(from))
 					} else if m != nil {
@@ -196,6 +201,9 @@ func (n *Node) finishReceive(tid string, x *xfer, opened chan *transfer.Receiver
 	case reason := <-x.aborted:
 		r.Abort(reason)
 		res = <-r.Done()
+	}
+	if res.Meta.Clip != "" {
+		n.clipDone(x.peerID, res)
 	}
 	if res.Err != nil {
 		if res.Meta.Name != "" {
@@ -244,6 +252,11 @@ type SendResult struct {
 // regular file goes as it is; several files or folders go as one ZIP built
 // while sending (nothing is staged on disk).
 func (n *Node) Send(ctx context.Context, ref string, paths []string, progress transfer.ProgressFunc) (*SendResult, error) {
+	return n.send(ctx, ref, paths, progress, "")
+}
+
+// send is Send; clipID marks a clipboard attachment requested by the peer.
+func (n *Node) send(ctx context.Context, ref string, paths []string, progress transfer.ProgressFunc, clipID string) (*SendResult, error) {
 	id := n.reload()
 	p, err := id.Find(ref)
 	if err != nil {
@@ -352,7 +365,7 @@ func (n *Node) Send(ctx context.Context, ref string, paths []string, progress tr
 	)
 	if single != nil {
 		total = st.Size()
-		meta = transfer.Meta{Name: filepath.Base(paths[0]), Size: total, Type: mimeType(paths[0])}
+		meta = transfer.Meta{Name: filepath.Base(paths[0]), Size: total, Type: mimeType(paths[0]), Clip: clipID}
 		r = single
 		n.opts.Log("sending", meta.Name, fmtBytes(total), pair.Name)
 	} else {
