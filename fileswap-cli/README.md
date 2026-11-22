@@ -20,7 +20,7 @@ The CLI is a FileSwap device like any browser tab: it has a name and a **device 
 curl -fsSL https://raw.githubusercontent.com/SethSterling22/SwapFile/main/fileswap-cli/install.sh | sh
 ```
 
-It picks the right package (`.deb` with apt, the Arch package with pacman, or the plain binary in `/usr/local/bin` elsewhere), checks it against the release's `SHA256SUMS`, installs it with `sudo`, **deletes the download**, and restarts the `fileswap` service if it is running. Run the same command again to **update**. A specific version: `… | sh -s -- --version v0.8.0-alpha.1`. To read the script first: `curl -fsSL …/install.sh -o install.sh && less install.sh && sh install.sh`.
+It picks the right package (`.deb` with apt, the Arch package with pacman, or the plain binary in `/usr/local/bin` elsewhere), checks it against the release's `SHA256SUMS`, installs it with `sudo`, **deletes the download**, removes older FileSwap binaries left elsewhere in your `PATH` (e.g. one copied by hand into `/usr/local/bin`, which would otherwise shadow the new one), and restarts the `fileswap` service if it is running. apt and pacman replace the previous version in place, so no old packages are left behind. Run the same command again to **update**. A specific version: `… | sh -s -- --version v0.8.0-alpha.1`. To read the script first: `curl -fsSL …/install.sh -o install.sh && less install.sh && sh install.sh`.
 
 **Manually** — download into `/tmp`, install, delete (replace the version with the one you want from [Releases](https://github.com/SethSterling22/SwapFile/releases)):
 
