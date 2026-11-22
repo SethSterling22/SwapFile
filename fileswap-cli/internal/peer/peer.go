@@ -24,6 +24,9 @@ type Signal struct {
 	TID       string                   `json:"tid,omitempty"`
 	Candidate *webrtc.ICECandidateInit `json:"candidate,omitempty"`
 	Reason    string                   `json:"reason,omitempty"` // abort only
+	// Kind is set on the offer of a non-file connection: "clip" browses or
+	// requests from the other device's clipboard.
+	Kind string `json:"kind,omitempty"`
 }
 
 // ParseSignal decodes signal data.
@@ -44,6 +47,7 @@ func NewTID() string {
 type Conn struct {
 	PC   *webrtc.PeerConnection
 	TID  string
+	Kind string // sent with the offer, see Signal.Kind
 	send func(Signal) error
 
 	mu        sync.Mutex
@@ -78,7 +82,7 @@ func (c *Conn) Offer() error {
 	if err := c.PC.SetLocalDescription(offer); err != nil {
 		return err
 	}
-	return c.send(Signal{Type: "offer", SDP: offer.SDP, TID: c.TID})
+	return c.send(Signal{Type: "offer", SDP: offer.SDP, TID: c.TID, Kind: c.Kind})
 }
 
 // Handle applies an offer, answer or candidate from the other side.

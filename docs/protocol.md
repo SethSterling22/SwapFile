@@ -155,6 +155,21 @@ The ZIP is written as a stream: every entry uses a data descriptor (CRC and size
 
 Receivers save the `.zip` as any other file and do not extract it (no path-traversal risk on receive).
 
+## 5. Clipboard
+
+Every device has a **clipboard**: items that its paired devices can see and take while it is online. An item has a `text` (a link, a command, a note — up to 64 KB), an attached file, or both. Items are independent (adding one never replaces another), each one is removed **24 h** after it was added, and a clipboard holds at most **500 MB** and 100 items. The web client keeps it in IndexedDB; the CLI in `<swap folder>/Clipboard` (files copied there by hand become items).
+
+Browsing and requests use their own connection: the viewer sends an offer with `kind: "clip"` (in `signal.data`, next to `tid`) and opens a DataChannel **`fileswap-clip`**, then sends one JSON request and closes the connection after the reply:
+
+| Request | Reply |
+|---|---|
+| `{"op":"list"}` | `{"op":"list","items":[…],"used":<bytes>,"limit":<bytes>}` |
+| `{"op":"get","id":"<item id>"}` | `{"op":"ok"}`, then the owner sends the attachment as a **normal transfer** (§3–4) with `meta.clip: "<item id>"`; or `{"op":"error","code":"NO_ITEM"}` |
+
+An item in `items`: `id` (8 hex characters), `text` (optional), `file: {name, size, type}` (optional), `created` and `expires` (milliseconds since the epoch). Texts travel in the list; files only when requested. A device that does not share a clipboard (a CLI not running `fileswap start`) answers the offer with `abort` reason `NO_CLIPBOARD`.
+
+Viewers may keep the last list they received and show it while the owner is offline — read-only: texts can be copied, files cannot be requested. Nothing is stored on the server: lists, texts and files only travel peer to peer.
+
 ## Compatibility
 
 v0 is the web client before this document: no `tid`, no `v`, no ack, no hash, and one connection per peer reused across transfers.

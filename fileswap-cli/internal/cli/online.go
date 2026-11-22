@@ -38,7 +38,14 @@ func control(ctx context.Context, id *identity.Identity, req node.Request) (*nod
 // oneShot connects a temporary node and runs fn once it is online (or after
 // connectTimeout, with online=false).
 func oneShot(e *env, fn func(ctx context.Context, n *node.Node, online bool) error) error {
-	n, err := node.New(node.Options{Dir: e.dir, Version: e.version})
+	return oneShotWith(e, node.Options{}, fn)
+}
+
+// oneShotWith is oneShot with extra node options (e.g. a swap folder to
+// receive a requested clipboard attachment).
+func oneShotWith(e *env, opts node.Options, fn func(ctx context.Context, n *node.Node, online bool) error) error {
+	opts.Dir, opts.Version = e.dir, e.version
+	n, err := node.New(opts)
 	if err != nil {
 		return err
 	}

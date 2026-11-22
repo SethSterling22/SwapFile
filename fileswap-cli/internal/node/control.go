@@ -25,6 +25,7 @@ type Request struct {
 	Cmd   string   `json:"cmd"` // status | sync | unpair | send | stop
 	Arg   string   `json:"arg,omitempty"`
 	Paths []string `json:"paths,omitempty"` // send: absolute paths of files and folders
+	Item  string   `json:"item,omitempty"`  // clipget: clipboard item id
 }
 
 // Progress is a "send" progress line.
@@ -44,6 +45,16 @@ type Response struct {
 
 	Progress *Progress   `json:"progress,omitempty"`
 	Sent     *SendResult `json:"sent,omitempty"`
+	Clip     *ClipList   `json:"clip,omitempty"`     // clipls
+	PeerID   string      `json:"peerId,omitempty"`   // clipls
+	Received *Received   `json:"received,omitempty"` // clipget
+}
+
+// Received is a file saved in the swap folder.
+type Received struct {
+	Path   string `json:"path"`
+	Size   int64  `json:"size"`
+	SHA256 string `json:"sha256"`
 }
 
 // ErrNotRunning means no `listen` is running for this identity.
@@ -164,6 +175,16 @@ func (n *Node) serveConn(ctx context.Context, conn net.Conn, stop func()) {
 			}
 		})
 		resp.Sent = res
+		setErr(&resp, err)
+	case "clipls":
+		list, peerID, err := n.ClipboardOf(ctx, req.Arg)
+		resp.Clip, resp.PeerID = list, peerID
+		setErr(&resp, err)
+	case "clipget":
+		res, err := n.ClipGet(ctx, req.Arg, req.Item)
+		if res != nil {
+			resp.Received = &Received{Path: res.Path, Size: res.Meta.Size, SHA256: res.SHA256}
+		}
 		setErr(&resp, err)
 	case "stop":
 		defer stop()

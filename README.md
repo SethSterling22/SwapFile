@@ -20,6 +20,8 @@ FileSwap connects two browser sessions directly using WebRTC DataChannels. The s
 
 If a paired device is offline (grey indicator), sending is blocked — there is nowhere for the file to go.
 
+Each device also has a **clipboard**: texts (links, commands, notes) and files that its paired devices can see, copy and download while it is online — items last 24 h, up to 500 MB, and the last list seen stays visible (greyed out) while the device is offline.
+
 There is also a **command-line node** for Linux servers — see [FileSwap CLI](#fileswap-cli-for-servers) below.
 
 The interface is available in **Spanish and English**. It follows the browser's language (any `es-*` → Spanish, otherwise English) until the user picks one with the **ES/EN** button in the header; the choice is saved per browser. Light/dark mode works the same way with the ☾/☀ button.
@@ -274,6 +276,7 @@ Copy `server/.env.example` → `server/.env`.
 
 - [ ] **v1.1** — E2E encryption (ECDH X25519 key exchange + AES-GCM 256-bit per-chunk)
 - [x] **v1.1** — Several files and folders (pick or drag & drop), sent as one ZIP built on the sending device
+- [x] **v1.1** — Clipboard per device: texts and files (24 h, 500 MB) that paired devices can see, copy and download; last seen list shown greyed out while offline
 - [x] **v1.1** — Bidirectional transfer (one WebRTC connection per transfer, receipt ack + SHA-256)
 - [ ] **v1.2** — CLI node for Linux servers ([fileswap-cli](fileswap-cli/README.md))
 - [ ] **v1.2** — Image preview before download on receiver side

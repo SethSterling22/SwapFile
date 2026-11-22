@@ -16,6 +16,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/SethSterling22/SwapFile/fileswap-cli/internal/clip"
 	"github.com/SethSterling22/SwapFile/fileswap-cli/internal/identity"
 	"github.com/SethSterling22/SwapFile/fileswap-cli/internal/signaling"
 )
@@ -57,6 +58,8 @@ type Options struct {
 	// InboxDir receives incoming files. Empty refuses incoming transfers
 	// (one-shot commands), so only `listen` receives.
 	InboxDir string
+	// Clip is this node's clipboard, served to paired devices; nil serves none.
+	Clip *clip.Store
 	// HandleRequests answers incoming pairing requests. One-shot commands
 	// leave it off so they never reject a request meant for `listen`.
 	HandleRequests bool
@@ -103,6 +106,8 @@ type Node struct {
 	// goneLog delays "went offline" log lines, so a device that reconnects
 	// right away (page reload, network blip) does not flood the log.
 	goneLog map[string]*time.Timer
+	// clipWaits are ClipGet calls waiting for the requested attachment.
+	clipWaits map[string]*clipWait
 
 	syncMu sync.Mutex // one outgoing pairing request at a time
 }
@@ -126,7 +131,7 @@ func New(opts Options) (*Node, error) {
 	if opts.Log == nil {
 		opts.Log = func(string, ...any) {}
 	}
-	n := &Node{opts: opts, id: id, presence: map[string]bool{}, transfers: map[string]*xfer{}, goneLog: map[string]*time.Timer{}, onlineCh: make(chan struct{}), since: time.Now()}
+	n := &Node{opts: opts, id: id, presence: map[string]bool{}, transfers: map[string]*xfer{}, goneLog: map[string]*time.Timer{}, clipWaits: map[string]*clipWait{}, onlineCh: make(chan struct{}), since: time.Now()}
 	n.client = &signaling.Client{
 		URL:       id.Server,
 		Secret:    id.Secret,
@@ -177,6 +182,9 @@ func (n *Node) hello() (string, []string) {
 // Run stays connected until ctx ends. It returns a CodeReplaced error if
 // another process registers with the same identity.
 func (n *Node) Run(ctx context.Context) error {
+	if n.opts.Clip != nil {
+		go n.expireClipboard(ctx)
+	}
 	err := n.client.Run(ctx)
 	if errors.Is(err, signaling.ErrReplaced) {
 		return errf(CodeReplaced, "")

@@ -83,6 +83,20 @@ A folder arrives as `Fotos.zip`; several paths as `fileswap-<date>-<time>.zip`. 
 
 **Pair a phone by QR:** `fileswap id --qr` draws the pairing link as a QR code in the terminal; scan it with the phone (the node must be online).
 
+**Clipboard:** a place to leave texts (links, commands, notes) and files for your other devices — they see it while this node is online and take what they need. Items never replace each other and each one lasts 24 h (500 MB at most).
+
+```bash
+fileswap clip add -t "ssh seth@aery -p 2222"         # a text
+fileswap clip add -t "Plano de la oficina" plano.pdf  # a text with a file
+echo "https://…" | fileswap clip add                  # from a pipe
+fileswap clip ls                                      # mine
+fileswap clip ls pc                                   # pc's clipboard (the last one seen if it is offline)
+fileswap clip get pc 3b66                             # prints the text, saves the file in ~/FileSwap
+fileswap clip rm 3b66                                 # or: fileswap clip rm all
+```
+
+The clipboard is the folder `~/FileSwap/Clipboard`: files copied there by hand are shared too.
+
 **Run it as a service** (starts at login, restarts if it crashes):
 
 ```bash
@@ -113,6 +127,10 @@ Run `fileswap --help` for the list, or `fileswap help <command>` / `fileswap <co
 | `status` | | Name, online state, device code, server, swap folder, uptime and the paired-devices table. Exit code 3 when it is not running |
 | `stop` | | Go offline (background or foreground) |
 | `service install\|remove` | | Run as a systemd user service: starts at login (at boot with lingering), restarts on crashes |
+| `clip add [-t <text>] [<file>]` | | Add an item to this node's clipboard (text from stdin with `-t -` or a pipe) |
+| `clip ls [<node>]` | | This node's clipboard, or another device's (last one seen while it is offline) |
+| `clip get <node> <id> [--dir <path>]` | | Take an item: print its text, save its file in the swap folder |
+| `clip rm <id>\|all` | | Remove items from this node's clipboard |
 | `tfr <node> <path>...` | `-tfr`, `send` | Send files or folders to a paired, online device (several → one ZIP) and wait for its SHA-256-checked confirmation |
 | `version` | `-v`, `--version` | Print the version |
 | `help [command]` | `-h`, `--help` | Show help |
@@ -148,6 +166,8 @@ Pairing requests reaching the node:
 |---|---|
 | `$FILESWAP_CONFIG`, else `$XDG_CONFIG_HOME/fileswap`, else `~/.config/fileswap` | `identity.json` — device secret (mode `0600`), name, server, paired devices, allow list |
 | `~/FileSwap` (or `init --dir` / `start --dir`), mode `0700` | Received files |
+| `~/FileSwap/Clipboard` (+ `.clipboard.json`) | This node's clipboard: attachments and the texts/times of the items |
+| `~/.local/state/fileswap/clipcache/<code>.json` | The last clipboard seen of each device, for offline viewing |
 | `$XDG_STATE_HOME/fileswap/listen.log`, else `~/.local/state/fileswap/listen.log` | Log of the node running in the background |
 | `$XDG_RUNTIME_DIR/fileswap/<code>.sock`, else `/tmp/fileswap-<uid>/` | Control socket of the running node |
 
@@ -214,6 +234,7 @@ fileswap-cli/
 - [x] `id --qr` (QR code in the terminal)
 - [ ] **F4** — End-to-end tests in Arch and Debian containers (two nodes pair, transfer, compare hashes)
 - [x] Several files and folders as one ZIP built while sending (CLI and web app)
+- [x] Clipboard per node (texts and files, 24 h, 500 MB), browsable by paired devices, offline preview
 - [ ] Later — E2E encryption shared with the web app, resume, TURN
 
 ---

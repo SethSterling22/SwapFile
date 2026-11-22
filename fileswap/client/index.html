@@ -383,6 +383,43 @@
       text-decoration: underline; text-underline-offset: 3px; white-space: nowrap;
     }
 
+    [hidden] { display: none !important; } /* .btn sets display, which would win over hidden */
+
+    /* Clipboard */
+    .clip-compose {
+      background: var(--paper); border: 1px solid var(--border); border-radius: var(--radius-sm);
+      box-shadow: var(--shadow); padding: 12px; display: flex; flex-direction: column; gap: 8px;
+    }
+    .clip-compose textarea {
+      width: 100%; resize: vertical; min-height: 54px; padding: 10px 12px;
+      background: var(--paper-2); color: var(--ink); border: 1.5px solid var(--border); border-radius: var(--radius-sm);
+      font-family: var(--font-mono); font-size: .85rem; outline: none;
+    }
+    .clip-compose textarea:focus { border-color: var(--kraft); }
+    .clip-compose-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .clip-compose-row #clip-add-btn { width: auto; margin-left: auto; }
+    .clip-attached { font-size: .8rem; color: var(--muted); overflow-wrap: anywhere; }
+    .clip-usage { font-size: .72rem; color: var(--muted); font-family: var(--font-mono); }
+    .clip-list { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+    #clip-modal .clip-list { margin-top: 0; max-height: 55dvh; overflow-y: auto; }
+    .clip-card {
+      background: var(--paper); border: 1px solid var(--border); border-left: 4px solid var(--manila-2);
+      border-radius: var(--radius-sm); padding: 10px 12px; display: flex; flex-direction: column; gap: 6px;
+    }
+    .clip-card.stale { opacity: .6; border-left-color: var(--border); }
+    .clip-text {
+      font-family: var(--font-mono); font-size: .82rem; white-space: pre-wrap; overflow-wrap: anywhere;
+      max-height: 9.5em; overflow-y: auto; color: var(--ink);
+    }
+    .clip-file { display: flex; gap: 8px; align-items: center; font-size: .85rem; min-width: 0; }
+    .clip-file-name { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+    .clip-file-size { font-family: var(--font-mono); font-size: .75rem; color: var(--muted); white-space: nowrap; }
+    .clip-foot { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .clip-expires { font-size: .72rem; color: var(--muted); }
+    .clip-actions { display: flex; gap: 6px; margin-left: auto; }
+    .clip-state-offline { color: var(--red); }
+    .clip-empty { font-size: .85rem; color: var(--muted); padding: 8px 0; }
+
     /* ───────────────────────────── Modals ──────────────────────────────────── */
     .modal-overlay {
       display: none; position: fixed; inset: 0;
@@ -679,6 +716,23 @@
         </div>
       </div>
 
+      <!-- My clipboard -->
+      <div id="clip-section">
+        <div class="section-title" data-i18n="clip.mine">Mi clipboard</div>
+        <div class="clip-compose">
+          <textarea id="clip-text" rows="2" maxlength="65536" data-i18n-placeholder="clip.placeholder" placeholder="Texto, enlace, comando o nota…"></textarea>
+          <div class="clip-compose-row">
+            <input type="file" id="clip-file" hidden />
+            <button class="btn btn-ghost btn-sm" id="clip-attach-btn" type="button" data-i18n="clip.attach">📎 Adjuntar archivo</button>
+            <span class="clip-attached" id="clip-attached"></span>
+            <button class="btn btn-ghost btn-sm" id="clip-detach-btn" type="button" hidden aria-label="✕">✕</button>
+            <button class="btn btn-primary btn-sm" id="clip-add-btn" type="button" data-i18n="clip.add">Añadir</button>
+          </div>
+          <div class="clip-usage" id="clip-usage"></div>
+        </div>
+        <div class="clip-list" id="clip-list"></div>
+      </div>
+
       <!-- Received files -->
       <div id="received-section" style="display:none">
         <div class="section-title" data-i18n="home.received">Archivos recibidos</div>
@@ -835,6 +889,22 @@
   </div>
 </div>
 
+<!-- ───── MODAL: Clipboard de otro dispositivo ───── -->
+<div class="modal-overlay" id="clip-modal">
+  <div class="modal" role="dialog" aria-labelledby="clip-modal-title">
+    <div class="info-head">
+      <div class="modal-title" id="clip-modal-title">Clipboard</div>
+      <button class="icon-close" id="clip-x-btn" data-i18n-title="common.close" title="Cerrar" aria-label="Cerrar">✕</button>
+    </div>
+    <div class="modal-sub clip-state" id="clip-modal-state">—</div>
+    <div class="clip-list" id="clip-modal-list"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="clip-refresh-btn" data-i18n="clip.refresh">↻ Actualizar</button>
+      <button class="btn btn-ghost" id="clip-close-btn" data-i18n="common.close">Cerrar</button>
+    </div>
+  </div>
+</div>
+
 <!-- ───── MODAL: Términos / Privacidad / Acerca de ───── -->
 <div class="modal-overlay" id="info-modal">
   <div class="modal" role="dialog" aria-labelledby="info-title">
@@ -974,6 +1044,34 @@ const I18N = {
     'toast.readError':    '⚠️ No se pudo leer uno de los archivos',
     'toast.emptyFolder':  'La carpeta no tiene archivos',
     'toast.received':     '✅ Archivo recibido de {name}',
+    'toast.clipReceived': '📋 Recibido del clipboard de {name}',
+    'toast.clipAdded':    '📋 Añadido a tu clipboard (dura 24 h)',
+    'toast.clipEmptyItem':'Escribe un texto o adjunta un archivo',
+    'toast.clipTooLong':  'El texto ocupa más de 64 KB',
+    'toast.clipFull':     'Tu clipboard está lleno (500 MB o 100 elementos); quita algo',
+    'toast.clipNoItem':   'Ese elemento ya no está en el clipboard',
+    'toast.clipError':    '⚠️ No se pudo completar la operación del clipboard',
+    'toast.clipTaking':   '📋 Pidiendo {name}…',
+    'toast.textCopied':   '📋 Texto copiado',
+    'clip.mine':          'Mi clipboard',
+    'clip.placeholder':   'Texto, enlace, comando o nota…',
+    'clip.attach':        '📎 Adjuntar archivo',
+    'clip.add':           'Añadir',
+    'clip.usage':         '{n} elementos · {used} de {limit} · cada elemento dura 24 h y lo ven tus dispositivos vinculados',
+    'clip.expires':       'vence en {left}',
+    'clip.copy':          'Copiar',
+    'clip.download':      'Descargar',
+    'clip.remove':        'Quitar',
+    'clip.peerTitle':     'Clipboard de {name}',
+    'clip.loading':       'Cargando…',
+    'clip.stateOnline':   '● En línea · {n} elementos · {used}',
+    'clip.stateOffline':  '○ Sin conexión · visto hace {ago}. Los archivos no se pueden descargar hasta que vuelva.',
+    'clip.neverSeen':     '○ Sin conexión y todavía no has visto su clipboard.',
+    'clip.notShared':     '{name} no comparte un clipboard ahora mismo (en el CLI, con fileswap start).',
+    'clip.peerEmpty':     'Su clipboard está vacío.',
+    'clip.justNow':       'un momento',
+    'clip.refresh':       '↻ Actualizar',
+    'peer.clipboard':     'Ver su clipboard',
     'toast.receiveError': '⚠️ Error al recibir el archivo',
     'toast.unlinked':     '🗑 {name} desvinculado',
     'toast.connecting':   'Conectando con el servidor…',
@@ -1095,6 +1193,34 @@ const I18N = {
     'toast.readError':    '⚠️ One of the files could not be read',
     'toast.emptyFolder':  'The folder has no files',
     'toast.received':     '✅ File received from {name}',
+    'toast.clipReceived': '📋 Received from {name}\'s clipboard',
+    'toast.clipAdded':    '📋 Added to your clipboard (lasts 24 h)',
+    'toast.clipEmptyItem':'Write a text or attach a file',
+    'toast.clipTooLong':  'The text is longer than 64 KB',
+    'toast.clipFull':     'Your clipboard is full (500 MB or 100 items); remove something',
+    'toast.clipNoItem':   'That item is no longer in the clipboard',
+    'toast.clipError':    '⚠️ The clipboard action could not be completed',
+    'toast.clipTaking':   '📋 Requesting {name}…',
+    'toast.textCopied':   '📋 Text copied',
+    'clip.mine':          'My clipboard',
+    'clip.placeholder':   'Text, link, command or note…',
+    'clip.attach':        '📎 Attach a file',
+    'clip.add':           'Add',
+    'clip.usage':         '{n} items · {used} of {limit} · each item lasts 24 h and your paired devices can see it',
+    'clip.expires':       'expires in {left}',
+    'clip.copy':          'Copy',
+    'clip.download':      'Download',
+    'clip.remove':        'Remove',
+    'clip.peerTitle':     '{name}\'s clipboard',
+    'clip.loading':       'Loading…',
+    'clip.stateOnline':   '● Online · {n} items · {used}',
+    'clip.stateOffline':  '○ Offline · seen {ago} ago. Files can\'t be downloaded until it is back.',
+    'clip.neverSeen':     '○ Offline, and you have not seen its clipboard yet.',
+    'clip.notShared':     '{name} is not sharing a clipboard right now (on the CLI, with fileswap start).',
+    'clip.peerEmpty':     'Its clipboard is empty.',
+    'clip.justNow':       'a moment',
+    'clip.refresh':       '↻ Refresh',
+    'peer.clipboard':     'See its clipboard',
     'toast.receiveError': '⚠️ Error receiving the file',
     'toast.unlinked':     '🗑 {name} unlinked',
     'toast.connecting':   'Connecting to the server…',
@@ -1400,7 +1526,10 @@ function createTransfer(tid, peerId) {
       clearTimeout(tr.dropTimer);
     }
   };
-  pc.ondatachannel = (ev) => setupReceiveChannel(ev.channel, peerId, tid);
+  pc.ondatachannel = (ev) => {
+    if (ev.channel.label === 'fileswap-clip') serveClipChannel(ev.channel, peerId, tid);
+    else setupReceiveChannel(ev.channel, peerId, tid);
+  };
   return tr;
 }
 
@@ -1484,7 +1613,8 @@ async function handleSignal(fromId, data) {
         tr.candidates.push(data.candidate);
       }
     } else if (data.type === 'abort') {
-      if (tr) failTransfer(tid, ABORT_TOASTS[data.reason] || 'toast.peerCancelled');
+      if (tr?.onAbort) tr.onAbort(data.reason);
+      else if (tr) failTransfer(tid, ABORT_TOASTS[data.reason] || 'toast.peerCancelled');
     }
   } catch (err) {
     console.warn('signal', data.type, err);
@@ -1877,7 +2007,7 @@ function setupReceiveChannel(dc, fromId, tid) {
     closeModal('transfer-modal');
     if (ok) {
       addReceivedFile({ name: meta.name, size: received, blob, url: URL.createObjectURL(blob) });
-      toast(t('toast.received', { name: fromName }));
+      toast(t(meta.clip ? 'toast.clipReceived' : 'toast.received', { name: fromName }));
     } else {
       toast(t('toast.receiveError'));
     }
@@ -1901,6 +2031,7 @@ function setupReceiveChannel(dc, fromId, tid) {
         name: parsed.name, size: parsed.size,
         approx: Number.isSafeInteger(parsed.approx) && parsed.approx > 0 ? parsed.approx : 0,
         type: typeof parsed.type === 'string' ? parsed.type : 'application/octet-stream',
+        clip: typeof parsed.clip === 'string' ? parsed.clip : '',
       };
       activeTid = tid;
       openTransferModal('transfer.receiving', meta.name);
@@ -1920,6 +2051,308 @@ function setupReceiveChannel(dc, fromId, tid) {
   };
   dc.onclose = () => fail('toast.connLost');
   dc.onerror = () => fail('toast.receiveError');
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  CLIPBOARD
+// ═══════════════════════════════════════════════════════════════
+// Every device has a clipboard: items with a text, an attached file, or
+// both, that paired devices can see and take while it is online
+// (docs/protocol.md §5). Here it lives in IndexedDB, so it survives reloads.
+// A viewer opens a connection with kind "clip" and a "fileswap-clip"
+// channel and asks {op:'list'} or {op:'get', id}; a requested file comes
+// back as a normal transfer with meta.clip = id. Nothing goes through the
+// server but signaling.
+const CLIP_LIMIT = 500 * 1024 * 1024;
+const CLIP_TTL_MS = 24 * 60 * 60 * 1000;
+const CLIP_MAX_TEXT = 64 * 1024;
+const CLIP_MAX_ITEMS = 100;
+const CLIP_REQUEST_TIMEOUT_MS = 20000;
+
+let clipDBPromise = null;
+function clipDB() {
+  clipDBPromise ??= new Promise((resolve, reject) => {
+    const req = indexedDB.open('fileswap', 1);
+    req.onupgradeneeded = () => {
+      req.result.createObjectStore('clip', { keyPath: 'id' });
+      req.result.createObjectStore('clipcache', { keyPath: 'peerId' });
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+  return clipDBPromise;
+}
+
+async function idb(storeName, mode, fn) {
+  const db = await clipDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(storeName, mode);
+    const result = fn(tx.objectStore(storeName));
+    tx.oncomplete = () => resolve(result?.result ?? result);
+    tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error);
+  });
+}
+
+const clipBytes = (it) => (it.size || 0) + new Blob([it.text || '']).size;
+const newClipId = () => newTid().slice(0, 8);
+
+// All items, newest first, without the expired ones (which are deleted).
+async function clipItems() {
+  const all = await idb('clip', 'readonly', (s) => s.getAll());
+  const now = Date.now();
+  const expired = all.filter((it) => now - it.created >= CLIP_TTL_MS);
+  if (expired.length) await idb('clip', 'readwrite', (s) => expired.forEach((it) => s.delete(it.id)));
+  return all.filter((it) => now - it.created < CLIP_TTL_MS).sort((a, b) => b.created - a.created);
+}
+
+async function clipAdd(text, file) {
+  text = (text || '').replace(/\n+$/, '');
+  if (!text && !file) throw new Error('EMPTY');
+  if (new Blob([text]).size > CLIP_MAX_TEXT) throw new Error('TOO_LONG');
+  const items = await clipItems();
+  const item = { id: newClipId(), text, created: Date.now() };
+  if (file) Object.assign(item, { blob: file, name: file.name, size: file.size, type: file.type || 'application/octet-stream' });
+  if (items.length >= CLIP_MAX_ITEMS || items.reduce((n, it) => n + clipBytes(it), 0) + clipBytes(item) > CLIP_LIMIT) throw new Error('FULL');
+  await idb('clip', 'readwrite', (s) => s.put(item));
+  return item;
+}
+
+const clipRemove = (id) => idb('clip', 'readwrite', (s) => s.delete(id));
+
+// The clipboard as listed to other devices
+async function clipListing() {
+  const items = await clipItems();
+  return {
+    op: 'list',
+    items: items.map((it) => ({
+      id: it.id,
+      ...(it.text ? { text: it.text } : {}),
+      ...(it.blob ? { file: { name: it.name, size: it.size, type: it.type } } : {}),
+      created: it.created,
+      expires: it.created + CLIP_TTL_MS,
+    })),
+    used: items.reduce((n, it) => n + clipBytes(it), 0),
+    limit: CLIP_LIMIT,
+  };
+}
+
+// ─── Owner side: answer a viewer ──────────────────────────────────────────
+function serveClipChannel(dc, peerId, tid) {
+  const reply = (v) => { try { dc.send(JSON.stringify(v)); } catch {} };
+  dc.onmessage = async (ev) => {
+    let req;
+    try { req = JSON.parse(ev.data); } catch { return; }
+    try {
+      if (req.op === 'list') {
+        reply(await clipListing());
+      } else if (req.op === 'get') {
+        const item = (await clipItems()).find((it) => it.id === req.id);
+        if (!item?.blob) return reply({ op: 'error', code: 'NO_ITEM' });
+        reply({ op: 'ok' });
+        const src = fileSource(new File([item.blob], item.name, { type: item.type }));
+        src.meta.clip = item.id;
+        sendSource(peerId, src);
+      } else {
+        reply({ op: 'error', code: 'UNKNOWN_OP' });
+      }
+    } catch (err) {
+      console.warn('clip', err);
+      reply({ op: 'error', code: 'ERROR' });
+    }
+  };
+  // The viewer closes after the reply; this is a fallback
+  setTimeout(() => endTransfer(tid), CLIP_REQUEST_TIMEOUT_MS);
+}
+
+// ─── Viewer side ──────────────────────────────────────────────────────────
+function clipRequest(peerId, req) {
+  return new Promise((resolve, reject) => {
+    const tid = newTid();
+    const tr = createTransfer(tid, peerId);
+    const dc = tr.pc.createDataChannel('fileswap-clip', { ordered: true });
+    let settled = false;
+    const done = (fn, v) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      tr.fail = null;
+      endTransfer(tid);
+      fn(v);
+    };
+    const timer = setTimeout(() => done(reject, new Error('TIMEOUT')), CLIP_REQUEST_TIMEOUT_MS);
+    tr.fail = () => done(reject, new Error('CONNECTION'));
+    tr.onAbort = (reason) => done(reject, new Error(reason || 'NO_CLIPBOARD'));
+    dc.onopen = () => { tr.open = true; dc.send(JSON.stringify(req)); };
+    dc.onmessage = (ev) => {
+      let msg;
+      try { msg = JSON.parse(ev.data); } catch { return; }
+      if (msg.op === 'error') done(reject, new Error(msg.code || 'ERROR'));
+      else done(resolve, msg);
+    };
+    tr.pc.createOffer()
+      .then((offer) => tr.pc.setLocalDescription(offer).then(() => offer))
+      .then((offer) => wsSend({ type: 'signal', to: peerId, data: { type: 'offer', sdp: offer.sdp, tid, kind: 'clip' } }))
+      .catch((err) => done(reject, err));
+  });
+}
+
+const saveClipCache = (peerId, list) => idb('clipcache', 'readwrite', (s) => s.put({ peerId, list, fetched: Date.now() })).catch(() => {});
+const loadClipCache = (peerId) => idb('clipcache', 'readonly', (s) => s.get(peerId)).catch(() => null);
+
+function fmtLeft(ms) {
+  if (ms >= 3600e3) return `${Math.round(ms / 3600e3)} h`;
+  return `${Math.max(1, Math.round(ms / 60e3))} min`;
+}
+
+function fmtAgo(ms) {
+  if (ms < 60e3) return t('clip.justNow');
+  if (ms < 3600e3) return `${Math.floor(ms / 60e3)} min`;
+  if (ms < 48 * 3600e3) return `${Math.floor(ms / 3600e3)} h`;
+  return `${Math.floor(ms / 86400e3)} d`;
+}
+
+// One item card: text (copy), attachment (download), expiry.
+// actions: { remove?: fn, download?: fn|null (null = disabled) }
+function clipCard(it, actions) {
+  const card = document.createElement('div');
+  card.className = 'clip-card';
+  const file = it.file || (it.blob ? { name: it.name, size: it.size } : null);
+  const left = (it.expires ?? it.created + CLIP_TTL_MS) - Date.now();
+  card.innerHTML = `
+    ${it.text ? `<div class="clip-text"></div>` : ''}
+    ${file ? `<div class="clip-file"><span class="clip-file-icon">${fileEmoji(file.name)}</span><span class="clip-file-name"></span><span class="clip-file-size">${fmtBytes(file.size)}</span></div>` : ''}
+    <div class="clip-foot">
+      <span class="clip-expires">${t('clip.expires', { left: fmtLeft(left) })}</span>
+      <span class="clip-actions"></span>
+    </div>`;
+  if (it.text) card.querySelector('.clip-text').textContent = it.text;
+  if (file) card.querySelector('.clip-file-name').textContent = file.name;
+  const bar = card.querySelector('.clip-actions');
+  const button = (label, fn, disabled) => {
+    const b = document.createElement('button');
+    b.className = 'btn btn-ghost btn-sm';
+    b.textContent = label;
+    b.disabled = !!disabled;
+    b.addEventListener('click', fn);
+    bar.appendChild(b);
+  };
+  if (it.text) button(t('clip.copy'), () => copyText(it.text, t('toast.textCopied')));
+  if (file && 'download' in actions) button(t('clip.download'), () => actions.download?.(), !actions.download);
+  if (actions.remove) button(t('clip.remove'), actions.remove);
+  return card;
+}
+
+// ─── My clipboard (home) ──────────────────────────────────────────────────
+let clipAttachment = null;
+
+async function renderMyClip() {
+  let items = [];
+  try { items = await clipItems(); } catch (err) { console.warn('clip', err); }
+  const used = items.reduce((n, it) => n + clipBytes(it), 0);
+  document.getElementById('clip-usage').textContent = t('clip.usage', { n: items.length, used: fmtBytes(used), limit: fmtBytes(CLIP_LIMIT) });
+  const list = document.getElementById('clip-list');
+  list.innerHTML = '';
+  for (const it of items) {
+    list.appendChild(clipCard(it, {
+      download: () => {
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(it.blob);
+        a.download = it.name;
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+      },
+      remove: async () => { await clipRemove(it.id); renderMyClip(); },
+    }));
+  }
+}
+
+function setClipAttachment(file) {
+  clipAttachment = file;
+  document.getElementById('clip-attached').textContent = file ? `${fileEmoji(file.name)} ${file.name} · ${fmtBytes(file.size)}` : '';
+  document.getElementById('clip-detach-btn').hidden = !file;
+}
+
+async function addToMyClip() {
+  const textEl = document.getElementById('clip-text');
+  try {
+    await clipAdd(textEl.value, clipAttachment);
+  } catch (err) {
+    const key = { EMPTY: 'toast.clipEmptyItem', TOO_LONG: 'toast.clipTooLong', FULL: 'toast.clipFull' }[err.message] || 'toast.clipError';
+    toast(t(key));
+    return;
+  }
+  textEl.value = '';
+  setClipAttachment(null);
+  document.getElementById('clip-file').value = '';
+  toast(t('toast.clipAdded'));
+  renderMyClip();
+}
+
+// ─── A paired device's clipboard (modal) ──────────────────────────────────
+let clipView = null; // { peerId, name }
+
+async function openPeerClip(peerId, name) {
+  clipView = { peerId, name };
+  document.getElementById('clip-modal-title').textContent = t('clip.peerTitle', { name });
+  openModal('clip-modal');
+  await refreshPeerClip();
+}
+
+async function refreshPeerClip() {
+  if (!clipView) return;
+  const { peerId, name } = clipView;
+  const stateEl = document.getElementById('clip-modal-state');
+  const listEl = document.getElementById('clip-modal-list');
+  const online = !!state.peers[peerId]?.online;
+  let list = null, fetched = null, live = false;
+  if (online) {
+    stateEl.textContent = t('clip.loading');
+    try {
+      list = await clipRequest(peerId, { op: 'list' });
+      fetched = Date.now();
+      live = true;
+      saveClipCache(peerId, list);
+    } catch (err) {
+      if (err.message === 'NO_CLIPBOARD') {
+        stateEl.textContent = t('clip.notShared', { name });
+        listEl.innerHTML = '';
+        return;
+      }
+    }
+  }
+  if (clipView?.peerId !== peerId) return; // the modal moved on meanwhile
+  if (!list) {
+    const cached = await loadClipCache(peerId);
+    if (cached) ({ list, fetched } = cached);
+  }
+  if (!list) {
+    stateEl.textContent = t('clip.neverSeen');
+    listEl.innerHTML = '';
+    return;
+  }
+  stateEl.textContent = live
+    ? t('clip.stateOnline', { n: list.items.length, used: fmtBytes(list.used || 0) })
+    : t('clip.stateOffline', { ago: fmtAgo(Date.now() - fetched) });
+  stateEl.classList.toggle('clip-state-offline', !live);
+  listEl.innerHTML = '';
+  const items = (list.items || []).filter((it) => it.expires > Date.now());
+  if (!items.length) listEl.innerHTML = `<div class="clip-empty">${t('clip.peerEmpty')}</div>`;
+  for (const it of items) {
+    const card = clipCard(it, { download: live ? () => takeFromPeerClip(peerId, it) : null });
+    if (!live) card.classList.add('stale');
+    listEl.appendChild(card);
+  }
+}
+
+async function takeFromPeerClip(peerId, item) {
+  try {
+    await clipRequest(peerId, { op: 'get', id: item.id });
+    closeModal('clip-modal');
+    toast(t('toast.clipTaking', { name: item.file.name }));
+  } catch (err) {
+    toast(t(err.message === 'NO_ITEM' ? 'toast.clipNoItem' : 'toast.clipError'));
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -1989,18 +2422,23 @@ function renderPeers() {
         </div>
       </div>
       <div class="peer-actions">
+        <button class="btn btn-ghost btn-sm clip-btn" title="${t('peer.clipboard')}" aria-label="${t('peer.clipboard')}">📋</button>
         <button class="btn btn-ghost btn-sm unlink-btn" data-id="${pair.id}" title="${t('peer.unlink')}" aria-label="${t('peer.unlink')}">🗑</button>
       </div>
     `;
     if (online) {
       card.addEventListener('click', (e) => {
-        if (e.target.closest('.unlink-btn')) return;
+        if (e.target.closest('.unlink-btn, .clip-btn')) return;
         openSendModal(pair.id, pair.name);
       });
     }
     card.querySelector('.unlink-btn').addEventListener('click', (e) => {
       e.stopPropagation();
       unlinkDevice(pair.id, pair.name);
+    });
+    card.querySelector('.clip-btn').addEventListener('click', (e) => {
+      e.stopPropagation();
+      openPeerClip(pair.id, pair.name);
     });
     list.appendChild(card);
   }
@@ -2215,7 +2653,7 @@ const LEGAL = {
       </ul>
       <p>Esta información se borra al desconectarte o cuando se reinicia el servidor; no hay base de datos. Los registros técnicos de errores del servidor pueden incluir tu dirección IP.</p>
       <h3>3. Qué se guarda en tu navegador</h3>
-      <p>En el almacenamiento local (localStorage) se guardan una clave secreta que identifica a tu dispositivo, su código y nombre, la lista de dispositivos vinculados y tus preferencias de tema e idioma. Puedes borrarlo todo eliminando los datos de este sitio desde tu navegador.</p>
+      <p>En el almacenamiento local (localStorage) se guardan una clave secreta que identifica a tu dispositivo, su código y nombre, la lista de dispositivos vinculados y tus preferencias de tema e idioma. Tu clipboard (los textos y archivos que añades, hasta 24 h) y la última lista vista del clipboard de cada dispositivo vinculado se guardan en el almacenamiento del navegador (IndexedDB); solo tus dispositivos vinculados pueden verlo, directamente y sin pasar por el servidor. Puedes borrarlo todo eliminando los datos de este sitio desde tu navegador.</p>
       <h3>4. Terceros</h3>
       <ul>
         <li><strong>Google</strong> (servidores STUN): ayudan a establecer la conexión directa y ven tu IP pública.</li>
@@ -2271,7 +2709,7 @@ const LEGAL = {
       </ul>
       <p>This information is deleted when you disconnect or when the server restarts; there is no database. The server’s technical error logs may include your IP address.</p>
       <h3>3. What is stored in your browser</h3>
-      <p>Local storage (localStorage) keeps a secret key that identifies your device, its code and name, the list of linked devices and your theme and language preferences. You can delete all of it by clearing this site’s data in your browser.</p>
+      <p>Local storage (localStorage) keeps a secret key that identifies your device, its code and name, the list of linked devices and your theme and language preferences. Your clipboard (the texts and files you add, for up to 24 h) and the last list seen of each linked device’s clipboard are kept in the browser’s storage (IndexedDB); only your linked devices can see it, directly and without going through the server. You can delete all of it by clearing this site’s data in your browser.</p>
       <h3>4. Third parties</h3>
       <ul>
         <li><strong>Google</strong> (STUN servers): help set up the direct connection and see your public IP.</li>
@@ -2374,7 +2812,7 @@ function applyLang(next) {
   // Re-render everything built from JS
   document.getElementById('conn-label').textContent     = t(`conn.${connState}`);
   document.getElementById('transfer-title').textContent = t(transferTitleKey);
-  if (state.deviceName) { updateMyCard(); renderPeers(); renderReceived(); }
+  if (state.deviceName) { updateMyCard(); renderPeers(); renderReceived(); renderMyClip(); }
   renderInfo();
 }
 
@@ -2577,6 +3015,19 @@ document.getElementById('transfer-cancel-btn').addEventListener('click', () => {
   closeModal('transfer-modal');
 });
 
+// Clipboard
+document.getElementById('clip-attach-btn').addEventListener('click', () => document.getElementById('clip-file').click());
+document.getElementById('clip-file').addEventListener('change', (e) => setClipAttachment(e.target.files[0] || null));
+document.getElementById('clip-detach-btn').addEventListener('click', () => { setClipAttachment(null); document.getElementById('clip-file').value = ''; });
+document.getElementById('clip-add-btn').addEventListener('click', addToMyClip);
+document.getElementById('clip-text').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) addToMyClip();
+});
+document.getElementById('clip-refresh-btn').addEventListener('click', refreshPeerClip);
+const closePeerClip = () => { clipView = null; closeModal('clip-modal'); };
+document.getElementById('clip-close-btn').addEventListener('click', closePeerClip);
+document.getElementById('clip-x-btn').addEventListener('click', closePeerClip);
+
 // Footer links → Terms / Privacy / About
 for (const a of document.querySelectorAll('[data-info]')) {
   a.addEventListener('click', (e) => { e.preventDefault(); openInfo(a.dataset.info); });
@@ -2609,6 +3060,8 @@ document.addEventListener('keydown', (e) => {
 function bootApp() {
   updateMyCard();
   renderPeers();
+  renderMyClip();
+  setInterval(renderMyClip, 10 * 60 * 1000); // drops expired items
   showScreen('screen-home');
   connectWS();
   checkPairParam();

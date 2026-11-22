@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/SethSterling22/SwapFile/fileswap-cli/internal/clip"
 	"github.com/SethSterling22/SwapFile/fileswap-cli/internal/identity"
 	"github.com/SethSterling22/SwapFile/fileswap-cli/internal/node"
 	"github.com/SethSterling22/SwapFile/fileswap-cli/internal/transfer"
@@ -77,7 +78,7 @@ func runForeground(e *env, id *identity.Identity, inbox string) error {
 		}
 		fmt.Fprintf(e.out, "%s  %s\n", time.Now().Format("15:04:05"), tf("log."+event, a...))
 	}
-	opts := node.Options{Dir: e.dir, Version: e.version, HandleRequests: true, InboxDir: inbox, Log: logf}
+	opts := node.Options{Dir: e.dir, Version: e.version, HandleRequests: true, InboxDir: inbox, Clip: clip.New(inbox), Log: logf}
 	if interactive {
 		opts.Decide = newPrompter(e).decide
 	}
