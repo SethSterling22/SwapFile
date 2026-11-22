@@ -87,6 +87,8 @@ jobs:
         run: |
           flags=""
           case "$GITHUB_REF_NAME" in *-*) flags="--prerelease" ;; esac
+          # Install instructions first, then GitHub's generated changelog
+          sed "s/{{TAG}}/$GITHUB_REF_NAME/g" packaging/release-notes.md > "$RUNNER_TEMP/notes.md"
           gh release create "$GITHUB_REF_NAME" dist/release/* \
-            --verify-tag --generate-notes $flags \
+            --verify-tag --generate-notes --notes-file "$RUNNER_TEMP/notes.md" $flags \
             --title "FileSwap $GITHUB_REF_NAME"

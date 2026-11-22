@@ -14,6 +14,8 @@ The CLI is a FileSwap device like any browser tab: it has a name and a **device 
 
 ## Install
 
+New to it? Follow the step-by-step **[install guide](../docs/install-cli.md)** (install → set up → go online → pair → use).
+
 **One command** — Debian/Ubuntu, Arch, or any other Linux (amd64 or arm64):
 
 ```bash
