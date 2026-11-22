@@ -36,6 +36,8 @@ jobs:
         working-directory: fileswap/server
       - name: gofmt
         run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
+      - name: shellcheck install.sh
+        run: shellcheck install.sh packaging/smoke.sh
       - run: make test
 
   package:

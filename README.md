@@ -181,7 +181,13 @@ fileswap sync <browser-code>             # pair; accept it in the browser
 fileswap tfr laptop ./backup.tar.gz      # send to a paired device; received files land in ~/FileSwap
 ```
 
-`.deb` (Debian/Ubuntu), Arch packages and plain binaries for `amd64`/`arm64` are published on [GitHub Releases](https://github.com/SethSterling22/SwapFile/releases). It is in early development; see its [roadmap](fileswap-cli/README.md#roadmap). The web app's transfers can be cancelled from either side, and fail fast (with a reason) when the other device disconnects, stops making progress or has no space.
+Install or update it with one command (Debian/Ubuntu, Arch or any Linux, amd64/arm64):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/SethSterling22/SwapFile/main/fileswap-cli/install.sh | sh
+```
+
+`.deb`, Arch packages and plain binaries are also on [GitHub Releases](https://github.com/SethSterling22/SwapFile/releases) — see [Install](fileswap-cli/README.md#install) for manual commands. It is in early development; see its [roadmap](fileswap-cli/README.md#roadmap). The web app's transfers can be cancelled from either side, and fail fast (with a reason) when the other device disconnects, stops making progress or has no space.
 
 ---
 

@@ -33,7 +33,7 @@ package: dist         ## Build .deb and Arch packages with nfpm (go run, no inst
 	  done; \
 	done
 
-release: package       ## + tar.gz per arch and SHA256SUMS in dist/release (what GitHub Releases gets)
+release: package       ## + tar.gz, version-less copies, install.sh and SHA256SUMS in dist/release (what GitHub Releases gets)
 	@rm -rf dist/release && mkdir -p dist/release
 	@for a in $(ARCHES); do \
 	  d=dist/tmp/fileswap_$(patsubst v%,%,$(VERSION))_linux_$$a; \
@@ -41,7 +41,16 @@ release: package       ## + tar.gz per arch and SHA256SUMS in dist/release (what
 	  tar -C dist/tmp -czf dist/release/$$(basename $$d).tar.gz $$(basename $$d) || exit 1; \
 	done
 	@rm -rf dist/tmp
-	@cp dist/*.deb dist/*.pkg.tar.zst dist/release/
+	@# GitHub renames "~" (in Debian pre-release versions) to "." on upload: use "." everywhere
+	@for f in dist/*.deb dist/*.pkg.tar.zst; do cp "$$f" "dist/release/$$(basename "$$f" | tr '~' '.')"; done
+	@# Version-less copies, so .../releases/latest/download/<name> always works
+	@cd dist/release && for a in $(ARCHES); do \
+	  p=$$(case $$a in amd64) echo x86_64;; arm64) echo aarch64;; esac); \
+	  cp fileswap_*_$$a.deb fileswap_$$a.deb && \
+	  cp fileswap-*-$$p.pkg.tar.zst fileswap-$$p.pkg.tar.zst && \
+	  cp fileswap_*_linux_$$a.tar.gz fileswap_linux_$$a.tar.gz || exit 1; \
+	done
+	@cp install.sh dist/release/
 	@cd dist/release && sha256sum * > SHA256SUMS && cat SHA256SUMS
 
 # Same targets without a local Go install, using the official Go image.
