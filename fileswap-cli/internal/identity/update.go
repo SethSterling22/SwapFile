@@ -60,6 +60,20 @@ func (id *Identity) SetPair(code, name string) bool {
 	return true
 }
 
+// SetPairKind records the kind a paired device announced. It reports whether anything changed.
+func (id *Identity) SetPairKind(code, kind string) bool {
+	if !ValidKind(kind) {
+		return false
+	}
+	for i, p := range id.Pairs {
+		if p.ID == code && p.Kind != kind {
+			id.Pairs[i].Kind = kind
+			return true
+		}
+	}
+	return false
+}
+
 // RemovePair removes a pair. It reports whether it was there.
 func (id *Identity) RemovePair(code string) bool {
 	for i, p := range id.Pairs {

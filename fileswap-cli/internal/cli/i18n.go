@@ -70,7 +70,7 @@ for transfers, straight to the other device.
 Options:
   --config <dir>   Config directory (default: $FILESWAP_CONFIG, else $XDG_CONFIG_HOME/fileswap, else ~/.config/fileswap)
 `,
-		"help.init": `Usage: fileswap init --name <name> [--server <url>] [--dir <path>] [--force]
+		"help.init": `Usage: fileswap init --name <name> [--server <url>] [--dir <path>] [--kind <kind>] [--force]
 
 Creates this node's identity: a private secret stored in the config directory
 and the public device code derived from it. Running init again keeps the code
@@ -81,6 +81,7 @@ will have to pair again).
   --server   FileSwap server, e.g. ws://192.168.1.10:7341 or https://fileswap.example.com
              (default: ws://localhost:7341)
   --dir      Swap folder where received files are saved (default: ~/FileSwap)
+  --kind     How other devices see it: server (default), desktop, laptop, phone, tablet
   --force    Replace the identity with a new one
 `,
 		"help.id":    "Usage: fileswap id [--qr]\n\nShows this node's name, device code, server, swap folder and the link that\npairs a browser with it.\n\n  --qr   Also draw the pairing link as a QR code: scan it with a phone to open\n         FileSwap and pair (the node must be online: fileswap start).\n",
@@ -197,6 +198,7 @@ Log: journalctl --user -u fileswap -f. ` + "`status`" + ` and ` + "`stop`" + ` w
 		"err.nameRequired":   "--name is required the first time",
 		"err.badCode":        "%q is not a valid device code (xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)",
 		"err.badServer":      "invalid server URL %q",
+		"err.badKind":        "unknown kind %q (one of: %s)",
 		"err.args":           "wrong arguments",
 
 		"nerr.OFFLINE":           "cannot reach the FileSwap server %s",
@@ -350,7 +352,7 @@ para las transferencias, directamente al otro dispositivo.
 Opciones:
   --config <dir>   Directorio de configuración (por defecto: $FILESWAP_CONFIG, si no $XDG_CONFIG_HOME/fileswap, si no ~/.config/fileswap)
 `,
-		"help.init": `Uso: fileswap init --name <nombre> [--server <url>] [--dir <ruta>] [--force]
+		"help.init": `Uso: fileswap init --name <nombre> [--server <url>] [--dir <ruta>] [--kind <tipo>] [--force]
 
 Crea la identidad de este nodo: un secreto privado guardado en el directorio de
 configuración y el código público que se deriva de él. Si vuelves a ejecutar
@@ -361,6 +363,7 @@ un código nuevo (los dispositivos vinculados tendrán que vincularse de nuevo).
   --server   Servidor FileSwap, p. ej. ws://192.168.1.10:7341 o https://fileswap.ejemplo.com
              (por defecto: ws://localhost:7341)
   --dir      Carpeta de swap donde se guarda lo recibido (por defecto: ~/FileSwap)
+  --kind     Cómo lo ven los otros dispositivos: server (por defecto), desktop, laptop, phone, tablet
   --force    Reemplaza la identidad por una nueva
 `,
 		"help.id":    "Uso: fileswap id [--qr]\n\nMuestra el nombre, el código del dispositivo, el servidor, la carpeta de swap\ny el enlace para vincular un navegador.\n\n  --qr   Dibuja además el enlace como código QR: escanéalo con el móvil para abrir\n         FileSwap y vincularte (el nodo debe estar en línea: fileswap start).\n",
@@ -479,6 +482,7 @@ Registro: journalctl --user -u fileswap -f. ` + "`status`" + ` y ` + "`stop`" + 
 		"err.nameRequired":   "--name es obligatorio la primera vez",
 		"err.badCode":        "%q no es un código de dispositivo válido (xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)",
 		"err.badServer":      "URL de servidor no válida %q",
+		"err.badKind":        "tipo %q desconocido (uno de: %s)",
 		"err.args":           "argumentos incorrectos",
 
 		"nerr.OFFLINE":           "no se puede llegar al servidor FileSwap %s",

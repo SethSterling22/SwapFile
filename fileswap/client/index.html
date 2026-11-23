@@ -6,6 +6,9 @@
   <meta name="theme-color" content="#eee7d3" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <title>FileSwap</title>
+  <link rel="icon" href="/favicon.ico" sizes="48x48" />
+  <link rel="icon" type="image/png" href="/icon-192.png" sizes="192x192" />
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
   <script>
     // Apply the theme before first paint (saved choice, else the OS preference)
     (function () {
@@ -385,6 +388,39 @@
 
     [hidden] { display: none !important; } /* .btn sets display, which would win over hidden */
 
+    /* Device kind picker */
+    .kind-picker { display: flex; flex-wrap: wrap; gap: 6px; }
+    .kind-opt {
+      padding: 7px 10px; font: inherit; font-size: .82rem; cursor: pointer;
+      background: var(--paper-2); color: var(--ink); border: 1.5px solid var(--border); border-radius: var(--radius-sm);
+    }
+    .kind-opt:hover { border-color: var(--kraft); }
+    .kind-opt[aria-checked="true"] { background: var(--manila); border-color: var(--manila-2); color: #2b2418; font-weight: 700; }
+
+    /* First-run guide tip */
+    .guide-tip {
+      display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+      background: var(--paper); border: 1px dashed var(--kraft); border-radius: var(--radius-sm);
+      padding: 10px 12px; font-size: .87rem;
+    }
+    .guide-tip-text { flex: 1; min-width: 160px; }
+    .guide-tip .btn-primary { width: auto; }
+    .setup-guide-link { font-size: .85rem; color: var(--blue-ink); text-align: center; text-decoration: underline; text-underline-offset: 3px; }
+    .doc ol.guide-steps { padding-left: 20px; display: flex; flex-direction: column; gap: 10px; margin-top: 8px; }
+    .doc ol.guide-steps strong { color: var(--ink); }
+    .doc code { font-family: var(--font-mono); font-size: .78rem; background: var(--paper-2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 1px 4px; overflow-wrap: anywhere; }
+
+    /* Start over */
+    .reset-zone {
+      border-top: 1.5px dashed var(--border); padding-top: 14px; margin-top: 4px;
+      display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    }
+    .reset-text { flex: 1; min-width: 200px; font-size: .8rem; color: var(--muted); }
+    .reset-btn { color: var(--red); border-color: var(--red); }
+    .reset-list { font-size: .85rem; padding-left: 20px; line-height: 1.6; color: var(--ink); }
+    .reset-check { display: flex; gap: 8px; align-items: flex-start; font-size: .85rem; cursor: pointer; }
+    .reset-check input { margin-top: 3px; accent-color: var(--red); }
+
     /* Clipboard */
     .clip-compose {
       background: var(--paper); border: 1px solid var(--border); border-radius: var(--radius-sm);
@@ -679,13 +715,32 @@
         <label for="setup-name" data-i18n="setup.nameLabel">Nombre de este dispositivo</label>
         <input id="setup-name" type="text" maxlength="50" data-i18n-placeholder="setup.placeholder" placeholder="Ej: PC Oficina, MacBook Ana…" autocomplete="off" />
       </div>
+      <div class="input-row" id="setup-kind">
+        <label data-i18n="kind.label">Tipo de dispositivo</label>
+        <div class="kind-picker" role="radiogroup" data-i18n-title="kind.label" title="Tipo de dispositivo">
+        <button type="button" class="kind-opt" data-kind="laptop">💻 <span data-i18n="kind.laptop">Portátil</span></button>
+        <button type="button" class="kind-opt" data-kind="desktop">🖥️ <span data-i18n="kind.desktop">Escritorio</span></button>
+        <button type="button" class="kind-opt" data-kind="phone">📱 <span data-i18n="kind.phone">Móvil</span></button>
+        <button type="button" class="kind-opt" data-kind="tablet">📲 <span data-i18n="kind.tablet">Tablet</span></button>
+        <button type="button" class="kind-opt" data-kind="server">🌐 <span data-i18n="kind.server">Servidor</span></button>
+      </div>
+      </div>
       <button class="btn btn-primary" id="setup-btn" data-i18n="setup.start">Comenzar →</button>
+      <a href="#guide" class="setup-guide-link" data-info="guide" data-i18n="guide.how">¿Cómo funciona? Guía rápida</a>
     </div>
   </div>
 
   <!-- ───── HOME SCREEN ───── -->
   <div class="screen" id="screen-home">
     <div class="home-inner">
+
+      <!-- First-run tip: opens the quick guide; dismissable -->
+      <div class="guide-tip" id="guide-tip" hidden>
+        <span class="guide-tip-icon">👋</span>
+        <span class="guide-tip-text" data-i18n="guide.tip">¿Primera vez? Mira cómo funciona en un minuto.</span>
+        <button class="btn btn-primary btn-sm" id="guide-tip-open" type="button" data-i18n="guide.open">Ver guía</button>
+        <button class="icon-close" id="guide-tip-close" type="button" data-i18n-title="guide.dismiss" title="No volver a mostrar" aria-label="No volver a mostrar">✕</button>
+      </div>
 
       <!-- My device -->
       <div class="folder" data-tab="Este dispositivo" data-i18n-tab="home.thisDevice">
@@ -739,12 +794,19 @@
         <div class="received-section" id="received-list"></div>
       </div>
 
+      <!-- Start over: wipe this browser's FileSwap data -->
+      <div class="reset-zone">
+        <div class="reset-text" data-i18n="reset.hint">¿Usaste un equipo que no es tuyo? Al terminar, borra todo lo de FileSwap en este navegador.</div>
+        <button class="btn btn-ghost btn-sm reset-btn" id="reset-btn" type="button" data-i18n="reset.button">🧹 Borrar todo y empezar de cero</button>
+      </div>
+
     </div>
   </div>
 
   <!-- ───── FOOTER ───── -->
   <footer class="app-footer">
     <span>© 2026 FileSwap</span>
+    <a href="#guide" data-info="guide" data-i18n="footer.guide">Guía rápida</a>
     <a href="#terms" data-info="terms" data-i18n="footer.terms">Términos de uso</a>
     <a href="#privacy" data-info="privacy" data-i18n="footer.privacy">Privacidad</a>
     <a href="#about" data-info="about" data-i18n="footer.about">Acerca de</a>
@@ -863,6 +925,16 @@
       <label for="rename-input" data-i18n="rename.label">Nombre</label>
       <input id="rename-input" type="text" maxlength="50" autocomplete="off" data-i18n-placeholder="setup.placeholder" placeholder="Ej: PC Oficina, MacBook Ana…" />
     </div>
+    <div class="input-row" id="rename-kind">
+      <label data-i18n="kind.label">Tipo de dispositivo</label>
+      <div class="kind-picker" role="radiogroup" data-i18n-title="kind.label" title="Tipo de dispositivo">
+        <button type="button" class="kind-opt" data-kind="laptop">💻 <span data-i18n="kind.laptop">Portátil</span></button>
+        <button type="button" class="kind-opt" data-kind="desktop">🖥️ <span data-i18n="kind.desktop">Escritorio</span></button>
+        <button type="button" class="kind-opt" data-kind="phone">📱 <span data-i18n="kind.phone">Móvil</span></button>
+        <button type="button" class="kind-opt" data-kind="tablet">📲 <span data-i18n="kind.tablet">Tablet</span></button>
+        <button type="button" class="kind-opt" data-kind="server">🌐 <span data-i18n="kind.server">Servidor</span></button>
+      </div>
+    </div>
     <div class="modal-actions">
       <button class="btn btn-primary" type="submit" data-i18n="rename.save">Guardar</button>
       <button class="btn btn-ghost" type="button" id="rename-cancel-btn" data-i18n="common.cancel">Cancelar</button>
@@ -871,6 +943,29 @@
 </div>
 
 <!-- ───── MODAL: Desvincular ───── -->
+<div class="modal-overlay" id="reset-modal">
+  <div class="modal" role="dialog" aria-labelledby="reset-title">
+    <div class="modal-title" id="reset-title" data-i18n="reset.title">Borrar todo en este navegador</div>
+    <div class="modal-sub" data-i18n="reset.body">FileSwap volverá a empezar desde cero aquí. Se borra:</div>
+    <ul class="reset-list">
+      <li data-i18n="reset.item.identity">El código y el nombre de este dispositivo</li>
+      <li data-i18n="reset.item.pairs">La lista de dispositivos vinculados</li>
+      <li data-i18n="reset.item.clip">Tu clipboard y las listas guardadas de otros clipboards</li>
+      <li data-i18n="reset.item.received">Los archivos recibidos en esta sesión</li>
+      <li data-i18n="reset.item.prefs">Las preferencias de idioma, tema y guía</li>
+    </ul>
+    <label class="reset-check">
+      <input type="checkbox" id="reset-unpair" checked />
+      <span data-i18n="reset.unpair">Desvincular también de mis dispositivos (recomendado: así no podrán enviarle nada a este navegador)</span>
+    </label>
+    <div class="modal-sub" style="font-size:.78rem" data-i18n="reset.note">Los archivos que ya descargaste en este equipo no se tocan. Los dispositivos desconectados quitarán este navegador de su lista a mano.</div>
+    <div class="modal-actions">
+      <button class="btn btn-danger" id="reset-confirm-btn" data-i18n="reset.confirm">Borrar todo</button>
+      <button class="btn btn-ghost" id="reset-cancel-btn" data-i18n="common.cancel">Cancelar</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="unlink-modal">
   <div class="modal" role="dialog" aria-labelledby="unlink-title">
     <div class="modal-title" id="unlink-title" data-i18n="unlink.title">Desvincular dispositivo</div>
@@ -1080,8 +1175,14 @@ const I18N = {
     'toast.requestSent':  'Solicitud enviada a {name}… acéptala en el otro dispositivo',
     'toast.copyFailed':   '⚠️ No se pudo copiar; selecciónalo y cópialo a mano',
     'toast.nameRequired': 'Ingresa un nombre para este dispositivo',
-    'rename.title':       'Renombrar dispositivo',
-    'rename.sub':         'El nombre es solo una etiqueta; el código de este dispositivo no cambia.',
+    'rename.title':       'Editar este dispositivo',
+    'rename.sub':         'El nombre y el tipo son solo etiquetas para reconocerlo; su código no cambia.',
+    'kind.label':         'Tipo de dispositivo',
+    'kind.laptop':        'Portátil',
+    'kind.desktop':       'Escritorio',
+    'kind.phone':         'Móvil',
+    'kind.tablet':        'Tablet',
+    'kind.server':        'Servidor',
     'rename.label':       'Nombre',
     'rename.save':        'Guardar',
     'unlink.title':       'Desvincular dispositivo',
@@ -1093,7 +1194,26 @@ const I18N = {
     'toast.reLink':       '🔐 Seguridad actualizada: vuelve a vincular tus dispositivos',
     'device.default':     'Dispositivo',
 
+    'footer.guide':       'Guía rápida',
     'footer.terms':       'Términos de uso',
+    'info.guide':         'Guía rápida',
+    'guide.tip':          '¿Primera vez? Mira cómo funciona en un minuto.',
+    'guide.open':         'Ver guía',
+    'guide.dismiss':      'No volver a mostrar',
+    'guide.how':          '¿Cómo funciona? Guía rápida',
+    'reset.hint':         '¿Usaste un equipo que no es tuyo? Al terminar, borra todo lo de FileSwap en este navegador.',
+    'reset.button':       '🧹 Borrar todo y empezar de cero',
+    'reset.title':        'Borrar todo en este navegador',
+    'reset.body':         'FileSwap volverá a empezar desde cero aquí. Se borra:',
+    'reset.item.identity':'El código y el nombre de este dispositivo',
+    'reset.item.pairs':   'La lista de dispositivos vinculados',
+    'reset.item.clip':    'Tu clipboard y las listas guardadas de otros clipboards',
+    'reset.item.received':'Los archivos recibidos en esta sesión',
+    'reset.item.prefs':   'Las preferencias de idioma, tema y guía',
+    'reset.unpair':       'Desvincular también de mis dispositivos (recomendado: así no podrán enviarle nada a este navegador)',
+    'reset.note':         'Los archivos que ya descargaste en este equipo no se tocan. Los dispositivos desconectados quitarán este navegador de su lista a mano.',
+    'reset.confirm':      'Borrar todo',
+    'toast.resetDone':    '🧹 Listo: FileSwap empezó de cero en este navegador',
     'footer.privacy':     'Privacidad',
     'footer.about':       'Acerca de',
     'info.terms':         'Términos y condiciones de uso',
@@ -1229,8 +1349,14 @@ const I18N = {
     'toast.requestSent':  'Request sent to {name}… accept it on the other device',
     'toast.copyFailed':   '⚠️ Couldn’t copy; select it and copy it manually',
     'toast.nameRequired': 'Enter a name for this device',
-    'rename.title':       'Rename device',
-    'rename.sub':         'The name is just a label; this device’s code does not change.',
+    'rename.title':       'Edit this device',
+    'rename.sub':         'The name and the kind are just labels to recognize it; its code does not change.',
+    'kind.label':         'Kind of device',
+    'kind.laptop':        'Laptop',
+    'kind.desktop':       'Desktop',
+    'kind.phone':         'Phone',
+    'kind.tablet':        'Tablet',
+    'kind.server':        'Server',
     'rename.label':       'Name',
     'rename.save':        'Save',
     'unlink.title':       'Unlink device',
@@ -1242,7 +1368,26 @@ const I18N = {
     'toast.reLink':       '🔐 Security upgraded: please link your devices again',
     'device.default':     'Device',
 
+    'footer.guide':       'Quick guide',
     'footer.terms':       'Terms of use',
+    'info.guide':         'Quick guide',
+    'guide.tip':          'First time here? See how it works in a minute.',
+    'guide.open':         'Open the guide',
+    'guide.dismiss':      'Don’t show again',
+    'guide.how':          'How does it work? Quick guide',
+    'reset.hint':         'Used a computer that isn’t yours? When you are done, delete everything FileSwap keeps in this browser.',
+    'reset.button':       '🧹 Delete everything and start over',
+    'reset.title':        'Delete everything in this browser',
+    'reset.body':         'FileSwap will start from scratch here. This deletes:',
+    'reset.item.identity':'This device’s code and name',
+    'reset.item.pairs':   'The list of paired devices',
+    'reset.item.clip':    'Your clipboard and the saved lists of other clipboards',
+    'reset.item.received':'The files received in this session',
+    'reset.item.prefs':   'Language, theme and guide preferences',
+    'reset.unpair':       'Also unpair from my devices (recommended: they won’t be able to send anything to this browser)',
+    'reset.note':         'Files you already downloaded on this computer are not touched. Offline devices will have to remove this browser from their list by hand.',
+    'reset.confirm':      'Delete everything',
+    'toast.resetDone':    '🧹 Done: FileSwap started over in this browser',
     'footer.privacy':     'Privacy',
     'footer.about':       'About',
     'info.terms':         'Terms and conditions of use',
@@ -1294,6 +1439,7 @@ let state = {
   deviceSecret: null, // 256-bit hex, never leaves this device except to the server on register
   deviceId:   null,   // public, derived by the server from deviceSecret
   deviceName: null,
+  deviceKind: null,   // laptop | desktop | phone | tablet | server — the icon other devices show
   pairs:      [],   // [{id, name}]
   peers:      {},   // deviceId → {name, online: bool}
 };
@@ -1322,6 +1468,7 @@ function loadState() {
     }
     const saved = JSON.parse(raw);
     state.deviceName = saved.deviceName || null;
+    state.deviceKind = KIND_EMOJI[saved.deviceKind] ? saved.deviceKind : guessKind();
     if (saved.deviceSecret) {
       state.deviceSecret = saved.deviceSecret;
       state.deviceId     = saved.deviceId || null;
@@ -1342,6 +1489,7 @@ function saveState() {
       deviceSecret: state.deviceSecret,
       deviceId:   state.deviceId,
       deviceName: state.deviceName,
+      deviceKind: state.deviceKind,
       pairs:      state.pairs,
     }));
   } catch {}
@@ -1358,6 +1506,7 @@ function registerMsg() {
     type:      'register',
     secret:    state.deviceSecret,
     name:      state.deviceName,
+    kind:      state.deviceKind,
     pairedIds: state.pairs.map(p => p.id),
   };
 }
@@ -1382,6 +1531,7 @@ function connectWS() {
       state.peers[id].online = false;
     }
     renderPeers();
+    if (resetting) return; // the user is starting over
     // Another tab of this browser took over the session — don't fight it
     if (ev.code === 4001) {
       connState = 'replaced';
@@ -1417,10 +1567,11 @@ function handleServerMsg(msg) {
       break;
 
     case 'presence': {
-      const { deviceId, name, online } = msg;
+      const { deviceId, name, online, kind } = msg;
       if (!state.peers[deviceId]) state.peers[deviceId] = { name, online: false };
       state.peers[deviceId].name   = name;
       state.peers[deviceId].online = online;
+      if (online) rememberKind(deviceId, kind);
       renderPeers();
       toast(t(online ? 'toast.peerOnline' : 'toast.peerOffline', { name }));
       if (!online) failConnectingTransfers(deviceId);
@@ -1430,7 +1581,7 @@ function handleServerMsg(msg) {
     case 'pair-request': {
       const { from } = msg;
       pendingPairRequest = from;
-      document.getElementById('requester-name').textContent = from.name;
+      document.getElementById('requester-name').textContent = `${deviceEmoji(from.kind, from.name)} ${from.name}`;
       document.getElementById('requester-id').textContent   = from.id;
       openModal('pair-request-modal');
       break;
@@ -1438,7 +1589,7 @@ function handleServerMsg(msg) {
 
     case 'pair-accepted': {
       const { from } = msg;
-      addPair(from.id, from.name);
+      addPair(from.id, from.name, from.kind);
       state.peers[from.id] = { name: from.name, online: true };
       renderPeers();
       closeModal('qr-modal');
@@ -1470,9 +1621,18 @@ function handleServerMsg(msg) {
 // ═══════════════════════════════════════════════════════════════
 //  PAIRS
 // ═══════════════════════════════════════════════════════════════
-function addPair(id, name) {
+function addPair(id, name, kind) {
   if (!state.pairs.find(p => p.id === id)) {
-    state.pairs.push({ id, name });
+    state.pairs.push({ id, name, ...(KIND_EMOJI[kind] ? { kind } : {}) });
+    saveState();
+  }
+}
+
+// Keeps the kind a paired device announces, so its icon shows while it is offline too
+function rememberKind(id, kind) {
+  const pair = state.pairs.find(p => p.id === id);
+  if (pair && KIND_EMOJI[kind] && pair.kind !== kind) {
+    pair.kind = kind;
     saveState();
   }
 }
@@ -2383,16 +2543,41 @@ function updateConnBadge(online) {
 function updateMyCard() {
   document.getElementById('my-name').textContent = state.deviceName;
   document.getElementById('my-id').textContent   = state.deviceId || t('conn.connecting');
-  document.getElementById('my-avatar').textContent = deviceEmoji(state.deviceName);
+  document.getElementById('my-avatar').textContent = deviceEmoji(state.deviceKind, state.deviceName);
 }
 
-function deviceEmoji(name) {
-  if (!name) return '📱';
+// Device kinds and their icons (the kind is announced by each device)
+const KIND_EMOJI = { laptop: '💻', desktop: '🖥️', phone: '📱', tablet: '📲', server: '🌐' };
+
+// A first guess for this browser; the user can change it
+function guessKind() {
+  const ua = navigator.userAgent;
+  if (/iPad|Tablet/i.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1) || (/Android/i.test(ua) && !/Mobile/i.test(ua))) return 'tablet';
+  if (/Mobi|iPhone|iPod|Android/i.test(ua)) return 'phone';
+  return 'laptop';
+}
+
+// Icon for a device: its announced kind, else a guess from its name (older versions)
+function deviceEmoji(kind, name = '') {
+  if (KIND_EMOJI[kind]) return KIND_EMOJI[kind];
   const n = name.toLowerCase();
-  if (n.includes('mac') || n.includes('pc') || n.includes('laptop') || n.includes('compu')) return '💻';
-  if (n.includes('ipad') || n.includes('tablet')) return '📟';
-  if (n.includes('tv')) return '📺';
-  return '📱';
+  if (/server|servidor|srv|nas|vps/.test(n)) return KIND_EMOJI.server;
+  if (/ipad|tablet/.test(n)) return KIND_EMOJI.tablet;
+  if (/desktop|escritorio|torre|imac/.test(n)) return KIND_EMOJI.desktop;
+  if (/mac|pc|laptop|portátil|portatil|compu|thinkpad/.test(n)) return KIND_EMOJI.laptop;
+  return KIND_EMOJI.phone;
+}
+
+// Kind pickers (setup screen and edit modal)
+function setKindPicker(root, kind) {
+  for (const b of root.querySelectorAll('.kind-opt')) b.setAttribute('aria-checked', String(b.dataset.kind === kind));
+}
+const pickedKind = (root) => root.querySelector('.kind-opt[aria-checked="true"]')?.dataset.kind || state.deviceKind;
+for (const root of document.querySelectorAll('.kind-picker')) {
+  root.addEventListener('click', (e) => {
+    const b = e.target.closest('.kind-opt');
+    if (b) setKindPicker(root, b.dataset.kind);
+  });
 }
 
 function renderPeers() {
@@ -2410,7 +2595,7 @@ function renderPeers() {
     card.className = `peer-card ${online ? 'online' : ''}`;
     card.innerHTML = `
       <div class="peer-avatar">
-        ${deviceEmoji(pair.name)}
+        ${deviceEmoji(pair.kind || peer.kind, pair.name)}
         <div class="peer-status ${online ? 'online' : ''}"></div>
       </div>
       <div class="peer-info">
@@ -2653,7 +2838,7 @@ const LEGAL = {
       </ul>
       <p>Esta información se borra al desconectarte o cuando se reinicia el servidor; no hay base de datos. Los registros técnicos de errores del servidor pueden incluir tu dirección IP.</p>
       <h3>3. Qué se guarda en tu navegador</h3>
-      <p>En el almacenamiento local (localStorage) se guardan una clave secreta que identifica a tu dispositivo, su código y nombre, la lista de dispositivos vinculados y tus preferencias de tema e idioma. Tu clipboard (los textos y archivos que añades, hasta 24 h) y la última lista vista del clipboard de cada dispositivo vinculado se guardan en el almacenamiento del navegador (IndexedDB); solo tus dispositivos vinculados pueden verlo, directamente y sin pasar por el servidor. Puedes borrarlo todo eliminando los datos de este sitio desde tu navegador.</p>
+      <p>En el almacenamiento local (localStorage) se guardan una clave secreta que identifica a tu dispositivo, su código y nombre, la lista de dispositivos vinculados y tus preferencias de tema e idioma. Tu clipboard (los textos y archivos que añades, hasta 24 h) y la última lista vista del clipboard de cada dispositivo vinculado se guardan en el almacenamiento del navegador (IndexedDB); solo tus dispositivos vinculados pueden verlo, directamente y sin pasar por el servidor. Puedes borrarlo todo con «🧹 Borrar todo y empezar de cero», al final de la página principal, o eliminando los datos de este sitio desde tu navegador.</p>
       <h3>4. Terceros</h3>
       <ul>
         <li><strong>Google</strong> (servidores STUN): ayudan a establecer la conexión directa y ven tu IP pública.</li>
@@ -2709,7 +2894,7 @@ const LEGAL = {
       </ul>
       <p>This information is deleted when you disconnect or when the server restarts; there is no database. The server’s technical error logs may include your IP address.</p>
       <h3>3. What is stored in your browser</h3>
-      <p>Local storage (localStorage) keeps a secret key that identifies your device, its code and name, the list of linked devices and your theme and language preferences. Your clipboard (the texts and files you add, for up to 24 h) and the last list seen of each linked device’s clipboard are kept in the browser’s storage (IndexedDB); only your linked devices can see it, directly and without going through the server. You can delete all of it by clearing this site’s data in your browser.</p>
+      <p>Local storage (localStorage) keeps a secret key that identifies your device, its code and name, the list of linked devices and your theme and language preferences. Your clipboard (the texts and files you add, for up to 24 h) and the last list seen of each linked device’s clipboard are kept in the browser’s storage (IndexedDB); only your linked devices can see it, directly and without going through the server. You can delete all of it with “🧹 Delete everything and start over” at the bottom of the main page, or by clearing this site’s data in your browser.</p>
       <h3>4. Third parties</h3>
       <ul>
         <li><strong>Google</strong> (STUN servers): help set up the direct connection and see your public IP.</li>
@@ -2765,13 +2950,87 @@ function aboutHtml() {
     </div>` : ''}`;
 }
 
-let currentInfo = null; // 'terms' | 'privacy' | 'about' | null
+// ─── Quick guide (footer, setup screen, first-run tip) ────────────────────
+const GUIDE_KEY = 'fileswap_guide_hidden';
+const CLI_INSTALL = 'curl -fsSL https://raw.githubusercontent.com/SethSterling22/SwapFile/main/fileswap-cli/install.sh | sh';
+const CLI_GUIDE_URL = 'https://github.com/SethSterling22/SwapFile/blob/main/docs/install-cli.md';
+
+const GUIDE = {
+  es: () => `
+    <p class="summary">FileSwap pasa archivos y textos directamente entre tus dispositivos. El servidor solo los presenta; lo que envías nunca pasa por él.</p>
+    <ol class="guide-steps">
+      <li><strong>Tu dispositivo.</strong> Arriba ves su nombre y su <em>código</em>. El nombre es solo una etiqueta; el código es lo que lo identifica (cópialo con ⧉).</li>
+      <li><strong>Vincula tus dispositivos, una sola vez.</strong> Pulsa «Vincular nuevo dispositivo»: verás un QR y tu código. En el otro dispositivo, escanea el QR o escribe el código, y acepta la solicitud en este. Quedan vinculados para siempre (hasta que pulses 🗑).</li>
+      <li><strong>Envía.</strong> Toca un dispositivo <em>en línea</em> (verde) y elige archivos o una carpeta; varios archivos viajan juntos en un ZIP creado aquí. El otro los ve en «Archivos recibidos». Los dos deben tener FileSwap abierto.</li>
+      <li><strong>Clipboard.</strong> En «Mi clipboard» deja textos (enlaces, comandos, notas) o archivos durante 24 h. Con 📋 en un dispositivo vinculado ves su clipboard y copias o descargas lo que tenga.</li>
+      <li><strong>En un equipo que no es tuyo,</strong> al terminar usa «🧹 Borrar todo y empezar de cero», al final de la página.</li>
+      <li><strong>En un servidor Linux,</strong> instala el programa de línea de comandos:<br><code>${CLI_INSTALL}</code><br>y sigue la <a href="${CLI_GUIDE_URL}" target="_blank" rel="noopener">guía de instalación</a>.</li>
+    </ol>
+    <p style="margin-top:12px">⚠️ Las transferencias van cifradas entre los dispositivos, pero todavía no hay cifrado de extremo a extremo propio: no lo uses para datos médicos, contraseñas ni claves.</p>`,
+  en: () => `
+    <p class="summary">FileSwap moves files and texts straight between your devices. The server only introduces them; what you send never goes through it.</p>
+    <ol class="guide-steps">
+      <li><strong>Your device.</strong> At the top you see its name and its <em>code</em>. The name is just a label; the code is what identifies it (copy it with ⧉).</li>
+      <li><strong>Pair your devices, once.</strong> Tap “Link a new device”: you get a QR code and your code. On the other device, scan the QR or type the code, then accept the request here. They stay paired (until you tap 🗑).</li>
+      <li><strong>Send.</strong> Tap an <em>online</em> (green) device and choose files or a folder; several files travel together in a ZIP made here. The other device gets them under “Received files”. Both need FileSwap open.</li>
+      <li><strong>Clipboard.</strong> In “My clipboard”, leave texts (links, commands, notes) or files for 24 h. With 📋 on a paired device you see its clipboard and copy or download what it has.</li>
+      <li><strong>On a computer that isn’t yours,</strong> when you are done use “🧹 Delete everything and start over” at the bottom of the page.</li>
+      <li><strong>On a Linux server,</strong> install the command-line program:<br><code>${CLI_INSTALL}</code><br>and follow the <a href="${CLI_GUIDE_URL}" target="_blank" rel="noopener">install guide</a>.</li>
+    </ol>
+    <p style="margin-top:12px">⚠️ Transfers are encrypted between the devices, but there is no end-to-end encryption of our own yet: don’t use it for medical data, passwords or keys.</p>`,
+};
+
+function showGuideTip() {
+  document.getElementById('guide-tip').hidden = localStorage.getItem(GUIDE_KEY) === '1';
+}
+
+function hideGuideTip() {
+  try { localStorage.setItem(GUIDE_KEY, '1'); } catch {}
+  document.getElementById('guide-tip').hidden = true;
+}
+
+// ─── Start over: delete everything FileSwap keeps in this browser ─────────
+let resetting = false;
+
+async function resetEverything(unpair) {
+  resetting = true; // stops the WebSocket from reconnecting
+  if (unpair && wsReady) {
+    for (const p of state.pairs) wsSend({ type: 'unpair', with: p.id });
+    // Let the unpair messages leave before the socket closes
+    for (let i = 0; i < 20 && ws && ws.bufferedAmount > 0; i++) await new Promise((r) => setTimeout(r, 50));
+    await new Promise((r) => setTimeout(r, 200));
+  }
+  for (const tid of [...transfers.keys()]) endTransfer(tid);
+  try { ws?.close(1000, 'reset'); } catch {}
+  for (const f of receivedFiles) URL.revokeObjectURL(f.url);
+  for (const k of [STORAGE_KEY, LEGACY_STORAGE_KEY, THEME_KEY, LANG_KEY, GUIDE_KEY]) {
+    try { localStorage.removeItem(k); } catch {}
+  }
+  try {
+    (await clipDBPromise)?.close();
+  } catch {}
+  await new Promise((resolve) => {
+    const req = indexedDB.deleteDatabase('fileswap');
+    req.onsuccess = req.onerror = req.onblocked = () => resolve();
+  });
+  try { sessionStorage.setItem('fileswap_reset_done', '1'); } catch {}
+  location.replace(location.pathname);
+}
+
+// Another tab started over: follow it instead of re-saving old data
+window.addEventListener('storage', (e) => {
+  if (e.key === STORAGE_KEY && e.newValue === null && !resetting) location.replace(location.pathname);
+});
+
+let currentInfo = null; // 'guide' | 'terms' | 'privacy' | 'about' | null
 
 function renderInfo() {
   if (!currentInfo) return;
   document.getElementById('info-title').textContent = t(`info.${currentInfo}`);
   const body = document.getElementById('info-body');
-  if (currentInfo === 'about') {
+  if (currentInfo === 'guide') {
+    body.innerHTML = `<div class="doc">${GUIDE[lang]()}</div>`;
+  } else if (currentInfo === 'about') {
     body.innerHTML = aboutHtml();
     const qrBox = document.getElementById('donate-qr');
     if (qrBox && typeof QRCode !== 'undefined') {
@@ -2830,6 +3089,7 @@ document.getElementById('setup-btn').addEventListener('click', () => {
   const name = document.getElementById('setup-name').value.trim();
   if (!name) { toast(t('toast.nameRequired')); return; }
   state.deviceName   = name;
+  state.deviceKind   = pickedKind(document.getElementById('setup-kind'));
   state.deviceSecret = state.deviceSecret || genSecret();
   saveState();
   bootApp();
@@ -2842,6 +3102,7 @@ document.getElementById('setup-name').addEventListener('keydown', (e) => {
 const renameInput = document.getElementById('rename-input');
 document.getElementById('edit-name-btn').addEventListener('click', () => {
   renameInput.value = state.deviceName;
+  setKindPicker(document.getElementById('rename-kind'), state.deviceKind);
   openModal('rename-modal');
   renameInput.focus();
   renameInput.select();
@@ -2851,8 +3112,10 @@ document.getElementById('rename-form').addEventListener('submit', (e) => {
   const name = renameInput.value.trim();
   if (!name) { toast(t('toast.nameRequired')); renameInput.focus(); return; }
   closeModal('rename-modal');
-  if (name === state.deviceName) return;
+  const kind = pickedKind(document.getElementById('rename-kind'));
+  if (name === state.deviceName && kind === state.deviceKind) return;
   state.deviceName = name;
+  state.deviceKind = kind;
   saveState();
   updateMyCard();
   if (wsReady) wsSend(registerMsg());
@@ -2911,7 +3174,7 @@ matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
 document.getElementById('pair-accept-btn').addEventListener('click', () => {
   if (!pendingPairRequest) return;
   wsSend({ type: 'pair-accept', to: pendingPairRequest.id });
-  addPair(pendingPairRequest.id, pendingPairRequest.name);
+  addPair(pendingPairRequest.id, pendingPairRequest.name, pendingPairRequest.kind);
   state.peers[pendingPairRequest.id] = { name: pendingPairRequest.name, online: true };
   renderPeers();
   closeModal('pair-request-modal');
@@ -3028,6 +3291,19 @@ const closePeerClip = () => { clipView = null; closeModal('clip-modal'); };
 document.getElementById('clip-close-btn').addEventListener('click', closePeerClip);
 document.getElementById('clip-x-btn').addEventListener('click', closePeerClip);
 
+// Quick guide tip and start over
+document.getElementById('guide-tip-open').addEventListener('click', () => { hideGuideTip(); openInfo('guide'); });
+document.getElementById('guide-tip-close').addEventListener('click', hideGuideTip);
+document.getElementById('reset-btn').addEventListener('click', () => {
+  document.getElementById('reset-unpair').checked = true;
+  openModal('reset-modal');
+});
+document.getElementById('reset-cancel-btn').addEventListener('click', () => closeModal('reset-modal'));
+document.getElementById('reset-confirm-btn').addEventListener('click', (e) => {
+  e.target.disabled = true;
+  resetEverything(document.getElementById('reset-unpair').checked);
+});
+
 // Footer links → Terms / Privacy / About
 for (const a of document.querySelectorAll('[data-info]')) {
   a.addEventListener('click', (e) => { e.preventDefault(); openInfo(a.dataset.info); });
@@ -3066,17 +3342,23 @@ function bootApp() {
   connectWS();
   checkPairParam();
   if (migratedIdentity) toast(t('toast.reLink'), 6000);
+  showGuideTip();
 }
 
 // Start
 applyTheme(document.documentElement.dataset.theme);
 applyLang(lang);
-if (['terms', 'privacy', 'about'].includes(location.hash.slice(1))) openInfo(location.hash.slice(1));
+if (['guide', 'terms', 'privacy', 'about'].includes(location.hash.slice(1))) openInfo(location.hash.slice(1));
 loadState();
 if (state.deviceName) {
   bootApp();
 } else {
   showScreen('screen-setup');
+  setKindPicker(document.getElementById('setup-kind'), state.deviceKind || guessKind());
+  if (sessionStorage.getItem('fileswap_reset_done')) {
+    sessionStorage.removeItem('fileswap_reset_done');
+    toast(t('toast.resetDone'), 5000);
+  }
   // Pre-fill if URL has pname (came from a pair link before setup)
   const pname = new URLSearchParams(location.search).get('pname');
   if (pname) {

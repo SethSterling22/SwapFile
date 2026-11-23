@@ -40,7 +40,7 @@ Endpoint: `ws://<host>:<port>/ws` (or `wss://` behind TLS). Every message is a J
 
 | `type` | Fields | Meaning |
 |---|---|---|
-| `register` | `secret`, `name`, `pairedIds: [code]` | Sent first, and again when the name or pairs change. `pairedIds` is the node's own list of paired codes; the server trusts it as the node's consent |
+| `register` | `secret`, `name`, `pairedIds: [code]`, `kind` (optional) | Sent first, and again when the name, kind or pairs change. `pairedIds` is the node's own list of paired codes; the server trusts it as the node's consent. `kind` is one of `laptop`, `desktop`, `phone`, `tablet`, `server` (others are ignored) — other devices show it as an icon |
 | `pair-request` | `to` | Ask device `to` (must be online) to pair |
 | `pair-accept` | `to` | Accept a pending request from `to`. Only valid after a real `pair-request` from `to` |
 | `pair-reject` | `to` | Reject a pending request from `to` |
@@ -53,9 +53,9 @@ Endpoint: `ws://<host>:<port>/ws` (or `wss://` behind TLS). Every message is a J
 | `type` | Fields | Meaning |
 |---|---|---|
 | `registered` | `deviceId` | Registration accepted; `deviceId` is this node's code |
-| `presence` | `deviceId`, `name`, `online` | A mutually paired device came online / went offline (also sent for each online peer right after `register`) |
-| `pair-request` | `from: {id, name}` | Someone wants to pair with this node |
-| `pair-accepted` | `from: {id, name}` | Our request was accepted. Add `from.id` to the local pairs and re-`register` |
+| `presence` | `deviceId`, `name`, `kind`, `online` | A mutually paired device came online / went offline (also sent for each online peer right after `register`) |
+| `pair-request` | `from: {id, name, kind}` | Someone wants to pair with this node |
+| `pair-accepted` | `from: {id, name, kind}` | Our request was accepted. Add `from.id` to the local pairs and re-`register` |
 | `pair-rejected` | `from: {id}` | Our request was rejected |
 | `unpaired` | `by` | `by` removed the pairing |
 | `signal` | `from`, `data` | Relayed from a paired device |

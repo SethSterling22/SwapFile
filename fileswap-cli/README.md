@@ -128,7 +128,7 @@ Run `fileswap --help` for the list, or `fileswap help <command>` / `fileswap <co
 
 | Command | Alias | What it does |
 |---|---|---|
-| `init --name <name> [--server <url>] [--dir <path>] [--force]` | | Create this node's identity. Re-running keeps the code and updates name/server/swap folder; `--force` makes a new code |
+| `init --name <name> [--server <url>] [--dir <path>] [--kind <kind>] [--force]` | | Create this node's identity. Re-running keeps the code and updates name/server/swap folder/kind; `--force` makes a new code. `--kind` is how other devices see it: `server` 🌐 (default), `desktop` 🖥️, `laptop` 💻, `phone` 📱, `tablet` 📲 |
 | `id [--qr]` | | Show name, device code, server, swap folder and the browser pairing link; `--qr` also draws it as a QR code |
 | `sync <code>` | `-sync` | Ask a device to pair with this node and wait (up to 2 min) for it to accept |
 | `peers` | | List paired devices and which are online |
