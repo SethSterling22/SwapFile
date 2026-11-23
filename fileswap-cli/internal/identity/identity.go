@@ -34,6 +34,23 @@ var (
 type Pair struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
+	Kind string `json:"kind,omitempty"` // as the device announces itself, see Kinds
+}
+
+// Kinds are the device kinds a node can announce; other devices show them as icons.
+var Kinds = []string{"server", "desktop", "laptop", "phone", "tablet"}
+
+// DefaultKind is what a CLI node announces unless init --kind says otherwise.
+const DefaultKind = "server"
+
+// ValidKind reports whether k is one of Kinds.
+func ValidKind(k string) bool {
+	for _, v := range Kinds {
+		if v == k {
+			return true
+		}
+	}
+	return false
 }
 
 // Identity is the persisted state of this node.
@@ -47,6 +64,16 @@ type Identity struct {
 	Allow []string `json:"allow"`
 	// Dir is the swap folder where `listen` saves received files ("" = DefaultInbox).
 	Dir string `json:"dir,omitempty"`
+	// Kind is the device kind this node announces ("" = DefaultKind).
+	Kind string `json:"kind,omitempty"`
+}
+
+// KindOrDefault is the kind this node announces.
+func (id *Identity) KindOrDefault() string {
+	if ValidKind(id.Kind) {
+		return id.Kind
+	}
+	return DefaultKind
 }
 
 // DefaultInboxName is the swap folder inside the home directory.

@@ -16,6 +16,7 @@ func runInit(e *env, args []string) error {
 	server := fs.String("server", "", "")
 	force := fs.Bool("force", false, "")
 	dir := fs.String("dir", "", "")
+	kind := fs.String("kind", "", "")
 	if err := parse(fs, args); err != nil {
 		return err
 	}
@@ -23,6 +24,9 @@ func runInit(e *env, args []string) error {
 		return &errUsage{cmd: "init", msg: t("err.args")}
 	}
 	*name = strings.TrimSpace(*name)
+	if *kind != "" && !identity.ValidKind(*kind) {
+		return &errUsage{cmd: "init", msg: fmt.Sprintf(t("err.badKind"), *kind, strings.Join(identity.Kinds, ", "))}
+	}
 	inbox := ""
 	if *dir != "" {
 		d, err := resolveDir(*dir)
@@ -60,6 +64,7 @@ func runInit(e *env, args []string) error {
 			return err
 		}
 		id.Dir = inbox
+		id.Kind = *kind
 		if err := id.Save(e.dir); err != nil {
 			return err
 		}
@@ -76,6 +81,9 @@ func runInit(e *env, args []string) error {
 			}
 			if inbox != "" {
 				id.Dir = inbox
+			}
+			if *kind != "" {
+				id.Kind = *kind
 			}
 			return nil
 		})
@@ -125,7 +133,7 @@ func runID(e *env, args []string) error {
 // swap folder and the browser pairing link (and the config dir for `id`).
 func printID(e *env, id *identity.Identity, withConfig bool) {
 	s := newStyle(e)
-	fmt.Fprintln(e.out, s.bold(id.Name))
+	fmt.Fprintln(e.out, kindEmoji(id.KindOrDefault(), id.Name)+" "+s.bold(id.Name))
 	fmt.Fprintln(e.out)
 	printCode(e, s, id.ID())
 	fmt.Fprintln(e.out)

@@ -34,6 +34,7 @@ type Msg struct {
 	Type     string          `json:"type"`
 	DeviceID string          `json:"deviceId,omitempty"`
 	Name     string          `json:"name,omitempty"`
+	Kind     string          `json:"kind,omitempty"`
 	Online   bool            `json:"online,omitempty"`
 	From     json.RawMessage `json:"from,omitempty"` // {id,name} in pair-*, a code in signal
 	By       string          `json:"by,omitempty"`
@@ -71,6 +72,8 @@ type Client struct {
 	Secret string
 	// Hello returns the name and paired codes sent with every register.
 	Hello func() (name string, pairedIDs []string)
+	// Kind is the device kind announced on register (laptop, server…); optional.
+	Kind string
 	// OnMessage receives every server message, on the read goroutine.
 	OnMessage func(Msg)
 	// OnState is told when the client becomes registered (online) or loses
@@ -197,7 +200,11 @@ func (c *Client) Register(ctx context.Context) error {
 	if c.Hello != nil {
 		name, ids = c.Hello()
 	}
-	return c.Send(ctx, map[string]any{"type": "register", "secret": c.Secret, "name": name, "pairedIds": ids})
+	msg := map[string]any{"type": "register", "secret": c.Secret, "name": name, "pairedIds": ids}
+	if c.Kind != "" {
+		msg["kind"] = c.Kind
+	}
+	return c.Send(ctx, msg)
 }
 
 // Send writes one JSON message. It is safe for concurrent use.

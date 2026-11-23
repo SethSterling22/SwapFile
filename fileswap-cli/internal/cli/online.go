@@ -215,7 +215,7 @@ func runStatus(e *env, args []string) error {
 	s := newStyle(e)
 	resp, err := control(context.Background(), id, node.Request{Cmd: "status"})
 	if err != nil || resp.Status == nil {
-		fmt.Fprintf(e.out, "%s  %s\n\n", s.bold(id.Name), s.state(false, false))
+		fmt.Fprintf(e.out, "%s %s  %s\n\n", kindEmoji(id.KindOrDefault(), id.Name), s.bold(id.Name), s.state(false, false))
 		printCode(e, s, id.ID())
 		fmt.Fprintln(e.out)
 		return &errExit{code: exitNotRunning, msg: "  " + t("status.notRunning")}
@@ -226,7 +226,7 @@ func runStatus(e *env, args []string) error {
 
 // printStatus is the block shown by `status` and `start`.
 func printStatus(e *env, s style, st *node.Status, logPath string) {
-	fmt.Fprintf(e.out, "%s  %s\n\n", s.bold(st.Name), s.state(st.Online, !st.Online))
+	fmt.Fprintf(e.out, "%s %s  %s\n\n", kindEmoji(st.Kind, st.Name), s.bold(st.Name), s.state(st.Online, !st.Online))
 	printCode(e, s, st.ID)
 	fmt.Fprintln(e.out)
 	rows := [][2]string{{t("ui.server"), st.Server}}

@@ -104,7 +104,7 @@ func runForeground(e *env, id *identity.Identity, inbox string) error {
 		logf("started", id.Name, id.ID(), inbox)
 	} else {
 		s := newStyle(e)
-		fmt.Fprintf(e.out, "%s  %s\n\n", s.bold(id.Name), s.dim(t("start.fgTitle")))
+		fmt.Fprintf(e.out, "%s %s  %s\n\n", kindEmoji(id.KindOrDefault(), id.Name), s.bold(id.Name), s.dim(t("start.fgTitle")))
 		printCode(e, s, id.ID())
 		fmt.Fprintln(e.out)
 		printRows(e, [][2]string{{t("ui.server"), id.Server}, {t("ui.folder"), short(inbox)}})

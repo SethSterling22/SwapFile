@@ -30,7 +30,7 @@ const secret = () => crypto.randomBytes(32).toString('hex');
 const wait = ms => new Promise(r => setTimeout(r, ms));
 
 // Connects, registers and resolves once the server confirms with `registered`
-function device(port, { secret: s = secret(), name = 'dev', pairedIds = [] } = {}) {
+function device(port, { secret: s = secret(), name = 'dev', pairedIds = [], kind } = {}) {
   return new Promise((resolve, reject) => {
     const ws = new WebSocket(`ws://localhost:${port}/ws`);
     ws.msgs = [];
@@ -41,7 +41,7 @@ function device(port, { secret: s = secret(), name = 'dev', pairedIds = [] } = {
       if (msg.type === 'registered') { ws.id = msg.deviceId; resolve(ws); }
       if (msg.type === 'error' && !ws.id) reject(new Error(msg.code));
     });
-    ws.on('open', () => ws.json({ type: 'register', secret: s, name, pairedIds }));
+    ws.on('open', () => ws.json({ type: 'register', secret: s, name, pairedIds, kind }));
     ws.on('error', reject);
     ws.json = obj => ws.send(JSON.stringify(obj));
   });
@@ -69,6 +69,16 @@ test('deviceId is derived from the secret and stable across reconnects', async (
   assert.notEqual(a1.id, other.id);
   assert.match(a1.id, /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
   [a1, a2, other].forEach(w => w.close());
+});
+
+test('the device kind travels with pairing and presence; unknown kinds are dropped', async () => {
+  const a = await device(srv.port, { name: 'A', kind: 'server' });
+  const b = await device(srv.port, { name: 'B', kind: 'rocket' });
+  await pair(a, b);
+  assert.ok(got(a, m => m.type === 'pair-request' && m.from.id === b.id && m.from.kind === ''));
+  assert.ok(got(b, m => m.type === 'pair-accepted' && m.from.kind === 'server'));
+  assert.ok(got(b, m => m.type === 'presence' && m.deviceId === a.id && m.kind === 'server'));
+  a.close(); b.close();
 });
 
 test('register without a valid secret is rejected', async () => {

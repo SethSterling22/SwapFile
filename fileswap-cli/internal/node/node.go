@@ -74,6 +74,7 @@ type Options struct {
 type Peer struct {
 	ID     string `json:"id"`
 	Name   string `json:"name"`
+	Kind   string `json:"kind,omitempty"`
 	Online bool   `json:"online"`
 }
 
@@ -82,6 +83,7 @@ type Status struct {
 	Online  bool      `json:"online"`
 	ID      string    `json:"id"`
 	Name    string    `json:"name"`
+	Kind    string    `json:"kind,omitempty"`
 	Server  string    `json:"server"`
 	Inbox   string    `json:"inbox,omitempty"`
 	PID     int       `json:"pid"`
@@ -136,6 +138,7 @@ func New(opts Options) (*Node, error) {
 		URL:       id.Server,
 		Secret:    id.Secret,
 		Hello:     n.hello,
+		Kind:      id.KindOrDefault(),
 		OnMessage: n.handle,
 		OnState:   n.setOnline,
 		UserAgent: "fileswap/" + opts.Version,
@@ -247,8 +250,16 @@ func (n *Node) handle(m signaling.Msg) {
 		was := n.presence[m.DeviceID]
 		n.presence[m.DeviceID] = m.Online
 		n.mu.Unlock()
-		if m.Online && m.Name != "" && n.peerName(m.DeviceID) != m.Name && n.identity().HasPair(m.DeviceID) {
-			_ = n.update(func(id *identity.Identity) error { id.SetPair(m.DeviceID, m.Name); return nil })
+		nameChanged := m.Name != "" && n.peerName(m.DeviceID) != m.Name
+		kindChanged := identity.ValidKind(m.Kind) && n.peerKind(m.DeviceID) != m.Kind
+		if m.Online && n.identity().HasPair(m.DeviceID) && (nameChanged || kindChanged) {
+			_ = n.update(func(id *identity.Identity) error {
+				if m.Name != "" {
+					id.SetPair(m.DeviceID, m.Name)
+				}
+				id.SetPairKind(m.DeviceID, m.Kind)
+				return nil
+			})
 		}
 		if was != m.Online {
 			n.logPresence(m.DeviceID, m.Online)
@@ -340,6 +351,15 @@ func (n *Node) logPresence(code string, online bool) {
 		return
 	}
 	n.opts.Log("peerOnline", n.peerName(code))
+}
+
+func (n *Node) peerKind(code string) string {
+	for _, p := range n.identity().Pairs {
+		if p.ID == code {
+			return p.Kind
+		}
+	}
+	return ""
 }
 
 func (n *Node) peerName(code string) string {
@@ -472,9 +492,9 @@ func (n *Node) Status() Status {
 	id := n.reload()
 	n.mu.Lock()
 	defer n.mu.Unlock()
-	st := Status{Online: n.online, ID: id.ID(), Name: id.Name, Server: id.Server, Inbox: n.opts.InboxDir, PID: os.Getpid(), Since: n.since, Version: n.opts.Version}
+	st := Status{Online: n.online, ID: id.ID(), Name: id.Name, Kind: id.KindOrDefault(), Server: id.Server, Inbox: n.opts.InboxDir, PID: os.Getpid(), Since: n.since, Version: n.opts.Version}
 	for _, p := range id.Pairs {
-		st.Peers = append(st.Peers, Peer{ID: p.ID, Name: p.Name, Online: n.presence[p.ID]})
+		st.Peers = append(st.Peers, Peer{ID: p.ID, Name: p.Name, Kind: p.Kind, Online: n.presence[p.ID]})
 	}
 	sort.SliceStable(st.Peers, func(i, j int) bool { return st.Peers[i].Online && !st.Peers[j].Online })
 	return st

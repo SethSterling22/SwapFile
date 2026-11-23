@@ -46,6 +46,8 @@ const devices = new Map();
 // register. The public deviceId (shown in the QR) is derived from it, so
 // knowing a deviceId is not enough to impersonate that device.
 const SECRET_RE = /^[0-9a-f]{64}$/;
+// Device kinds a client may announce (shown as an icon by the other devices)
+const KINDS = new Set(['phone', 'tablet', 'laptop', 'desktop', 'server']);
 const ID_RE     = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 function idFromSecret(secret) {
@@ -221,6 +223,7 @@ wss.on('connection', (ws, req) => {
           entry = {
             ws,
             name: 'Dispositivo',
+            kind: '',
             pairedIds: new Set(),
             pendingFrom: new Set(),
           };
@@ -229,6 +232,7 @@ wss.on('connection', (ws, req) => {
         deviceId = id;
 
         if (msg.name) entry.name = String(msg.name).slice(0, 60);
+        if (KINDS.has(msg.kind)) entry.kind = msg.kind;
 
         // The client's localStorage is the source of truth for its own consent
         if (Array.isArray(msg.pairedIds)) {
@@ -239,8 +243,8 @@ wss.on('connection', (ws, req) => {
 
         // Exchange presence only with devices that also list us as paired
         for (const [pairedId, peer] of mutualPeers(deviceId)) {
-          send(peer.ws, { type: 'presence', deviceId, name: entry.name, online: true });
-          sendSelf({ type: 'presence', deviceId: pairedId, name: peer.name, online: true });
+          send(peer.ws, { type: 'presence', deviceId, name: entry.name, kind: entry.kind, online: true });
+          sendSelf({ type: 'presence', deviceId: pairedId, name: peer.name, kind: peer.kind, online: true });
         }
 
         touch(entry);
@@ -262,7 +266,7 @@ wss.on('connection', (ws, req) => {
           return;
         }
         target.pendingFrom.add(deviceId);
-        send(target.ws, { type: 'pair-request', from: { id: deviceId, name: me.name } });
+        send(target.ws, { type: 'pair-request', from: { id: deviceId, name: me.name, kind: me.kind } });
         break;
       }
 
@@ -281,10 +285,10 @@ wss.on('connection', (ws, req) => {
         me.pairedIds.add(msg.to);
         target.pairedIds.add(deviceId);
 
-        send(target.ws, { type: 'pair-accepted', from: { id: deviceId, name: me.name } });
+        send(target.ws, { type: 'pair-accepted', from: { id: deviceId, name: me.name, kind: me.kind } });
         // Mutual presence notification
-        send(target.ws, { type: 'presence', deviceId, name: me.name, online: true });
-        sendSelf({ type: 'presence', deviceId: msg.to, name: target.name, online: true });
+        send(target.ws, { type: 'presence', deviceId, name: me.name, kind: me.kind, online: true });
+        sendSelf({ type: 'presence', deviceId: msg.to, name: target.name, kind: target.kind, online: true });
         break;
       }
 
