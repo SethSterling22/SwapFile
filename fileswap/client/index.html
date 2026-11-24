@@ -2801,10 +2801,13 @@ const LEGAL = {
     terms: (contact) => `
       <p class="summary">FileSwap es una herramienta gratuita para enviar archivos directamente entre navegadores. Úsala de forma responsable y solo con archivos que tengas derecho a compartir.</p>
       <h3>1. Qué es FileSwap</h3>
+      <hr></hr>
       <p>FileSwap conecta dos navegadores mediante WebRTC para que los archivos viajen directamente de uno a otro. El servidor solo ayuda a que los dispositivos se encuentren: los archivos no pasan por él ni se guardan en él.</p>
       <h3>2. Aceptación</h3>
+      <hr></hr>
       <p>Al usar FileSwap aceptas estos términos. Si no estás de acuerdo con ellos, no lo uses.</p>
       <h3>3. Uso aceptable</h3>
+      <hr></hr>
       <p>Te comprometes a:</p>
       <ul>
         <li>enviar solo archivos que tengas derecho a compartir;</li>
@@ -2813,22 +2816,27 @@ const LEGAL = {
         <li>aceptar vinculaciones solo de dispositivos cuyo código reconozcas.</li>
       </ul>
       <h3>4. Información sensible</h3>
+      <hr></hr>
       <p>Los archivos van cifrados en tránsito por WebRTC (DTLS), pero FileSwap todavía no añade un cifrado de extremo a extremo propio. <strong>No lo uses para información sensible o regulada</strong>, como datos médicos o de pacientes, datos financieros o documentos de identidad.</p>
       <h3>5. Sin garantías</h3>
+      <hr></hr>
       <p>FileSwap se ofrece «tal cual» y «según disponibilidad», sin garantías de ningún tipo. Puede haber fallos, interrupciones o transferencias incompletas: conserva siempre tu copia original.</p>
       <h3>6. Responsabilidad</h3>
+      <hr></hr>
       <p>En la medida en que lo permita la ley, quien opera FileSwap no responde por daños derivados de su uso ni por el contenido que los usuarios intercambian entre sí. Cada usuario es responsable de lo que envía y de lo que acepta recibir.</p>
       <h3>7. Código abierto</h3>
+      <hr></hr>
       <p>El código fuente se distribuye bajo la licencia GPL-3.0 incluida en el repositorio. Estos términos regulan el uso de este servicio, no tus derechos sobre el código.</p>
       <h3>8. Cambios</h3>
-      <p>Estos términos pueden actualizarse; la fecha de arriba indica la versión vigente. Seguir usando FileSwap después de un cambio implica aceptarlo.</p>
-      <h3>9. Contacto</h3>
-      <p>${contact}</p>`,
+      <hr></hr>
+      <p>Estos términos pueden actualizarse; la fecha de arriba indica la versión vigente. Seguir usando FileSwap después de un cambio implica aceptarlo.</p>`,
     privacy: (contact) => `
       <p class="summary">FileSwap no tiene cuentas, no usa cookies ni analítica, y el servidor nunca recibe el contenido de tus archivos.</p>
       <h3>1. Tus archivos</h3>
+      <hr></hr>
       <p>Viajan directamente de un navegador a otro por WebRTC, cifrados en tránsito (DTLS). No pasan por el servidor ni se almacenan en él. En el dispositivo que los recibe se quedan en la memoria de la pestaña hasta que la cierras o la recargas, salvo que los descargues.</p>
       <h3>2. Qué maneja el servidor</h3>
+      <hr></hr>
       <p>Para conectar los dispositivos, el servidor de señalización maneja, solo en memoria:</p>
       <ul>
         <li>el código de tu dispositivo (UUID) y el nombre que le pusiste;</li>
@@ -2838,8 +2846,10 @@ const LEGAL = {
       </ul>
       <p>Esta información se borra al desconectarte o cuando se reinicia el servidor; no hay base de datos. Los registros técnicos de errores del servidor pueden incluir tu dirección IP.</p>
       <h3>3. Qué se guarda en tu navegador</h3>
+      <hr></hr>
       <p>En el almacenamiento local (localStorage) se guardan una clave secreta que identifica a tu dispositivo, su código y nombre, la lista de dispositivos vinculados y tus preferencias de tema e idioma. Tu clipboard (los textos y archivos que añades, hasta 24 h) y la última lista vista del clipboard de cada dispositivo vinculado se guardan en el almacenamiento del navegador (IndexedDB); solo tus dispositivos vinculados pueden verlo, directamente y sin pasar por el servidor. Puedes borrarlo todo con «🧹 Borrar todo y empezar de cero», al final de la página principal, o eliminando los datos de este sitio desde tu navegador.</p>
       <h3>4. Terceros</h3>
+      <hr></hr>
       <ul>
         <li><strong>Google</strong> (servidores STUN): ayudan a establecer la conexión directa y ven tu IP pública.</li>
         <li><strong>Cloudflare</strong> (cdnjs): sirve la librería que dibuja los códigos QR y ve tu IP al descargarla.</li>
@@ -2847,44 +2857,55 @@ const LEGAL = {
         <li><strong>PayPal</strong>: solo si usas el enlace de donación; se rige por su propia política de privacidad.</li>
       </ul>
       <h3>5. Lo que no hacemos</h3>
+      <hr></hr>
       <p>No vendemos ni compartimos datos, no usamos cookies, rastreadores ni analítica, y no creamos perfiles de uso.</p>
       <h3>6. Tus derechos</h3>
+      <hr></hr>
       <p>Como no hay cuentas, no guardamos datos personales a tu nombre de forma persistente. Para dejar de usar FileSwap basta con desvincular tus dispositivos y borrar los datos del sitio. Si tienes preguntas, contacta: ${contact}</p>
       <h3>7. Cambios</h3>
+      <hr></hr>
       <p>Cualquier cambio se publicará en esta página con una nueva fecha.</p>`,
   },
   en: {
     terms: (contact) => `
       <p class="summary">FileSwap is a free tool to send files directly between browsers. Use it responsibly and only with files you have the right to share.</p>
       <h3>1. What FileSwap is</h3>
+      <hr></hr>
       <p>FileSwap connects two browsers over WebRTC so files travel directly from one to the other. The server only helps devices find each other: files never go through it and are never stored on it.</p>
       <h3>2. Acceptance</h3>
+      <hr></hr>
       <p>By using FileSwap you accept these terms. If you don’t agree with them, don’t use it.</p>
       <h3>3. Acceptable use</h3>
+      <hr></hr>
       <p>You agree to:</p>
       <ul>
-        <li>only send files you have the right to share;</li>
-        <li>not send malware, illegal content or material that infringes the rights of others;</li>
-        <li>not try to overload or interfere with the service, or access other devices without authorization;</li>
-        <li>only accept link requests from devices whose code you recognize.</li>
+        <li>Only send files you have the right to share;</li>
+        <li>Not send malware, illegal content or material that infringes the rights of others;</li>
+        <li>Not try to overload or interfere with the service, or access other devices without authorization;</li>
+        <li>Only accept link requests from devices whose code you recognize.</li>
       </ul>
       <h3>4. Sensitive information</h3>
-      <p>Files are encrypted in transit by WebRTC (DTLS), but FileSwap does not yet add its own end-to-end encryption. <strong>Do not use it for sensitive or regulated information</strong>, such as medical or patient data, financial data or identity documents.</p>
+      <hr></hr>
+      <p>Files are <b>encrypted</b> in transit by WebRTC (DTLS), but FileSwap does not yet add its own end-to-end encryption. <strong>Do not use it for sensitive or regulated information</strong>, such as medical or patient data, financial data or identity documents.</p>
       <h3>5. No warranty</h3>
+      <hr></hr>
       <p>FileSwap is provided “as is” and “as available”, without warranties of any kind. Failures, outages or incomplete transfers may happen: always keep your original copy.</p>
       <h3>6. Liability</h3>
+      <hr></hr>
       <p>To the extent permitted by law, whoever operates FileSwap is not liable for damages arising from its use, nor for the content users exchange with each other. Each user is responsible for what they send and what they agree to receive.</p>
       <h3>7. Open source</h3>
+      <hr></hr>
       <p>The source code is distributed under the GPL-3.0 license included in the repository. These terms govern the use of this service, not your rights to the code.</p>
       <h3>8. Changes</h3>
-      <p>These terms may be updated; the date above shows the current version. Continuing to use FileSwap after a change means you accept it.</p>
-      <h3>9. Contact</h3>
-      <p>${contact}</p>`,
+      <hr></hr>
+      <p>These terms may be updated; the date above shows the current version. Continuing to use FileSwap after a change means you accept it.</p>`,
     privacy: (contact) => `
       <p class="summary">FileSwap has no accounts, uses no cookies or analytics, and the server never receives the contents of your files.</p>
       <h3>1. Your files</h3>
+      <hr></hr>
       <p>They travel directly from one browser to another over WebRTC, encrypted in transit (DTLS). They never go through the server and are never stored on it. On the receiving device they stay in the tab’s memory until you close or reload it, unless you download them.</p>
       <h3>2. What the server handles</h3>
+      <hr></hr>
       <p>To connect devices, the signaling server handles, in memory only:</p>
       <ul>
         <li>your device code (UUID) and the name you gave it;</li>
@@ -2894,8 +2915,10 @@ const LEGAL = {
       </ul>
       <p>This information is deleted when you disconnect or when the server restarts; there is no database. The server’s technical error logs may include your IP address.</p>
       <h3>3. What is stored in your browser</h3>
+      <hr></hr>
       <p>Local storage (localStorage) keeps a secret key that identifies your device, its code and name, the list of linked devices and your theme and language preferences. Your clipboard (the texts and files you add, for up to 24 h) and the last list seen of each linked device’s clipboard are kept in the browser’s storage (IndexedDB); only your linked devices can see it, directly and without going through the server. You can delete all of it with “🧹 Delete everything and start over” at the bottom of the main page, or by clearing this site’s data in your browser.</p>
       <h3>4. Third parties</h3>
+      <hr></hr>
       <ul>
         <li><strong>Google</strong> (STUN servers): help set up the direct connection and see your public IP.</li>
         <li><strong>Cloudflare</strong> (cdnjs): serves the library that draws the QR codes and sees your IP when downloading it.</li>
@@ -2903,10 +2926,13 @@ const LEGAL = {
         <li><strong>PayPal</strong>: only if you use the donation link; its own privacy policy applies.</li>
       </ul>
       <h3>5. What we don’t do</h3>
+      <hr></hr>
       <p>We don’t sell or share data, we don’t use cookies, trackers or analytics, and we don’t build usage profiles.</p>
       <h3>6. Your rights</h3>
+      <hr></hr>
       <p>Since there are no accounts, we don’t persistently keep personal data under your name. To stop using FileSwap, just unlink your devices and clear the site’s data. If you have questions, contact: ${contact}</p>
       <h3>7. Changes</h3>
+      <hr></hr>
       <p>Any change will be published on this page with a new date.</p>`,
   },
 };
@@ -2959,8 +2985,8 @@ const GUIDE = {
   es: () => `
     <p class="summary">FileSwap pasa archivos y textos directamente entre tus dispositivos. El servidor solo los presenta; lo que envías nunca pasa por él.</p>
     <ol class="guide-steps">
-      <li><strong>Tu dispositivo.</strong> Arriba ves su nombre y su <em>código</em>. El nombre es solo una etiqueta; el código es lo que lo identifica (cópialo con ⧉).</li>
-      <li><strong>Vincula tus dispositivos, una sola vez.</strong> Pulsa «Vincular nuevo dispositivo»: verás un QR y tu código. En el otro dispositivo, escanea el QR o escribe el código, y acepta la solicitud en este. Quedan vinculados para siempre (hasta que pulses 🗑).</li>
+      <li><strong>Tu dispositivo.</strong> Arriba ves su nombre y su <em>UUID</em>. El nombre es solo una etiqueta; el UUID es lo que lo identifica (cópialo con ⧉).</li>
+      <li><strong>Vincula tus dispositivos, una sola vez.</strong> Pulsa «Vincular nuevo dispositivo»: donde se desplegará el QR y un UUID, siendo los dos identificadores de tu dispositivo. En el otro dispositivo, escanea el QR o escribe el UUID, y acepta la solicitud en este para confirmar la vinculación, la cual permanecerá hasta que pulses 🗑.</li>
       <li><strong>Envía.</strong> Toca un dispositivo <em>en línea</em> (verde) y elige archivos o una carpeta; varios archivos viajan juntos en un ZIP creado aquí. El otro los ve en «Archivos recibidos». Los dos deben tener FileSwap abierto.</li>
       <li><strong>Clipboard.</strong> En «Mi clipboard» deja textos (enlaces, comandos, notas) o archivos durante 24 h. Con 📋 en un dispositivo vinculado ves su clipboard y copias o descargas lo que tenga.</li>
       <li><strong>En un equipo que no es tuyo,</strong> al terminar usa «🧹 Borrar todo y empezar de cero», al final de la página.</li>
@@ -2970,8 +2996,8 @@ const GUIDE = {
   en: () => `
     <p class="summary">FileSwap moves files and texts straight between your devices. The server only introduces them; what you send never goes through it.</p>
     <ol class="guide-steps">
-      <li><strong>Your device.</strong> At the top you see its name and its <em>code</em>. The name is just a label; the code is what identifies it (copy it with ⧉).</li>
-      <li><strong>Pair your devices, once.</strong> Tap “Link a new device”: you get a QR code and your code. On the other device, scan the QR or type the code, then accept the request here. They stay paired (until you tap 🗑).</li>
+      <li><strong>Your device.</strong> At the top you see its name and its <em>UUID</em>. The name is just a label; the UUID is what identifies it (copy it with ⧉).</li>
+      <li><strong>Pair your devices, once.</strong> Tap “Link a new device”: where a QR code and a UUID will be displayed—both serving as identifiers for your current device. On the other device, scan the QR code or enter the UUID, then accept the request to confirm the pairing, which will remain in place until you press 🗑.</li>
       <li><strong>Send.</strong> Tap an <em>online</em> (green) device and choose files or a folder; several files travel together in a ZIP made here. The other device gets them under “Received files”. Both need FileSwap open.</li>
       <li><strong>Clipboard.</strong> In “My clipboard”, leave texts (links, commands, notes) or files for 24 h. With 📋 on a paired device you see its clipboard and copy or download what it has.</li>
       <li><strong>On a computer that isn’t yours,</strong> when you are done use “🧹 Delete everything and start over” at the bottom of the page.</li>
