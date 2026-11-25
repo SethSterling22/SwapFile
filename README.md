@@ -252,7 +252,7 @@ Edit the `ABOUT` object near the top of the script in `fileswap/client/index.htm
 | `source` | "Source code" link |
 | `paypal` | Your PayPal.me link — the donation box and its QR code are generated from it. Leave empty to hide the box |
 
-The legal texts live in the `LEGAL` object in the same file and describe what the code actually does (P2P transfer, in-memory signaling, Google STUN, cdnjs). If you change that behavior, update them and `LEGAL_UPDATED`. They are a starting point, not legal advice.
+The legal texts live in the `LEGAL` object in the same file and describe what the code actually does (P2P transfer, in-memory signaling, Google STUN). If you change that behavior, update them and `LEGAL_UPDATED`. They are a starting point, not legal advice.
 
 ---
 
@@ -267,7 +267,12 @@ Copy `server/.env.example` → `server/.env`.
 | `MAX_MSG_BYTES` | `16384` | Max WebSocket message size — signaling only (16 KB) |
 | `MAX_SESSIONS` | `50000` | Max concurrent devices in memory |
 | `RATE_LIMIT_PER_MIN` | `120` | Max WebSocket messages per minute per device |
-| `CORS_ORIGIN` | `*` | Allowed CORS origin (set to your domain in production) |
+| `CORS_ORIGIN` | *(empty)* | CORS origin for the HTTP endpoints; empty sends no CORS header (the web app is served from the same origin and doesn't need one) |
+| `ALLOWED_ORIGINS` | *(empty)* | Extra comma-separated origins whose pages may open the WebSocket. The server's own host is always allowed, and so are clients without an `Origin` (the CLI); any other website is refused with `403` |
+| `TRUST_PROXY` | *(off)* | Set to `1` behind Caddy/nginx: the client IP is taken from the last `X-Forwarded-For` hop, and HSTS is sent on HTTPS. Leave it off if the port is reachable directly, or anyone could fake their IP |
+| `MAX_CONN_PER_IP` | `20` | Max simultaneous WebSocket connections from one IP (`429` beyond it) |
+
+Every page is served with a Content-Security-Policy (inline scripts allowed only by their SHA-256), `X-Frame-Options: DENY`, `nosniff`, `Referrer-Policy: no-referrer` and `Permissions-Policy`. No third-party script is loaded: the QR library is self-hosted in [`client/vendor/`](fileswap/client/vendor/README.md) with Subresource Integrity.
 
 ---
 
@@ -279,6 +284,7 @@ Copy `server/.env.example` → `server/.env`.
 | Unauthorized signal relay | Server only forwards signals between devices that list each other as paired. `pair-accept` is only honored as the answer to a real `pair-request`. The receiver also ignores signals from unknown devices. |
 | QR link interception | The attacker needs the target device to be online and accept the pairing request. |
 | Impersonation / session hijack | Each device keeps a random 256-bit `deviceSecret` in `localStorage`; the public `deviceId` (shown in the QR) is `SHA-256(secret)`. Knowing a `deviceId` is not enough to register as it. A newer connection with the same secret replaces the old one (close code `4001`). |
+| Abuse of a public server | Other websites cannot open the WebSocket (Origin check), connections per IP and messages per device are limited, and the page can't be framed (clickjacking). |
 | Server-side data leakage | No database, no logs of content or file metadata. Server only knows device names and pairing relationships. |
 
 > **Note:** In-transit encryption is provided by WebRTC's mandatory DTLS layer. End-to-end application-layer encryption (ECDH + AES-GCM via Web Crypto API) is planned for v1.1.
@@ -293,7 +299,8 @@ Copy `server/.env.example` → `server/.env`.
 - [x] **v1.1** — Bidirectional transfer (one WebRTC connection per transfer, receipt ack + SHA-256)
 - [ ] **v1.2** — CLI node for Linux servers ([fileswap-cli](fileswap-cli/README.md))
 - [ ] **v1.2** — Image preview before download on receiver side
-- [ ] **v2.0** — File System Access API streaming for files > 2 GB
+- [x] **v1.1** — Large files in the browser: written to disk (Origin Private File System) while receiving instead of kept in memory; browsers without it refuse files over 1.5 GB (512 MB on phones) up front
+- [x] **v1.1** — Hardened public server (Origin check, per-IP limit, CSP and security headers, self-hosted QR library) and a "new version, reload" notice
 - [ ] **v2.0** — One-to-many (broadcast to multiple paired devices simultaneously)
 - [ ] **v2.0** — Encrypted inode-based virtual drive (compressed, ephemeral)
 - [ ] **v2.0** — TURN server support for symmetric NAT (corporate networks)

@@ -197,6 +197,8 @@ make build            # ./dist/fileswap for this machine
 make test             # go vet + go test
 make dist             # dist/fileswap-linux-amd64 and -arm64
 make package          # + .deb and Arch packages in dist/ (needs network for nfpm)
+packaging/e2e.sh      # end to end: server image + a Debian and an Arch node pair, send a file,
+                      # a folder (ZIP) and use the clipboard (FILESWAP_BIN=dist/fileswap after make build)
 
 make docker-build     # the same, without installing Go
 make docker-test
@@ -207,7 +209,7 @@ Binaries are static (`CGO_ENABLED=0`), so the same file runs on Arch, Debian or 
 
 ### Releases
 
-Pushing a tag `vX.Y.Z` runs [.github/workflows/cli.yml](../.github/workflows/cli.yml): tests, builds `amd64`/`arm64`, packages `.deb` and Arch, installs them in `debian:stable` and `archlinux:latest` containers as a smoke test, and publishes everything to a GitHub Release.
+Pushing a tag `vX.Y.Z` runs [.github/workflows/cli.yml](../.github/workflows/cli.yml): tests, builds `amd64`/`arm64`, packages `.deb` and Arch, installs them in `debian:stable` and `archlinux:latest` containers as a smoke test, runs `packaging/e2e.sh` (two nodes, Debian and Arch, through the real server image), and publishes everything to a GitHub Release.
 
 ```bash
 git tag -a v0.2.0 -m "FileSwap v0.2.0"

@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
   <meta name="theme-color" content="#eee7d3" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
+  <!-- Replaced by the server with a hash of this file: tells open tabs a newer version is out -->
+  <meta name="fileswap-version" content="__FILESWAP_VERSION__" />
   <title>FileSwap</title>
   <link rel="icon" href="/favicon.ico" sizes="48x48" />
   <link rel="icon" type="image/png" href="/icon-192.png" sizes="192x192" />
@@ -18,7 +20,7 @@
       document.documentElement.dataset.theme = dark ? 'dark' : 'light';
     })();
   </script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" crossorigin="anonymous"></script>
+  <script src="/vendor/qrcode.min.js" integrity="sha512-CNgIRecGo7nphbeZ04Sc13ka07paqdeTu0WR1IM4kNcpmBAUSHSQX0FslNhTDadL4O5SAGapGt4FodqL8My0mA=="></script>
   <style>
     /* ───────────────────────────── Reset & Base ───────────────────────────── */
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -397,6 +399,17 @@
     .kind-opt:hover { border-color: var(--kraft); }
     .kind-opt[aria-checked="true"] { background: var(--manila); border-color: var(--manila-2); color: #2b2418; font-weight: 700; }
 
+    /* New version banner */
+    .update-banner {
+      position: fixed; top: 12px; left: 50%; transform: translateX(-50%) rotate(-.5deg); z-index: 300;
+      display: flex; align-items: center; gap: 10px;
+      background: #fff3a8; color: #2b2418; border: 1px solid #d9c25a; border-radius: var(--radius-sm);
+      box-shadow: var(--shadow); padding: 8px 10px 8px 14px; font-size: .87rem;
+      max-width: calc(100vw - 24px);
+    }
+    .update-banner .btn-primary { width: auto; }
+    .update-banner .icon-close { color: #2b2418; }
+
     /* First-run guide tip */
     .guide-tip {
       display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
@@ -651,6 +664,15 @@
     .donate-text h3 { font-family: var(--font-title); font-size: 1rem; margin-bottom: 4px; }
     .donate-text p { font-size: .84rem; color: var(--muted); line-height: 1.5; margin-bottom: 10px; }
     .donate-text .btn { width: auto; }
+    .feedback {
+      margin-top: 18px; padding: 14px 16px;
+      border: 1.5px solid var(--border); border-radius: var(--radius-sm);
+      background: var(--paper-2);
+    }
+    .feedback h3 { font-family: var(--font-title); font-size: 1rem; margin-bottom: 4px; }
+    .feedback p { font-size: .84rem; color: var(--muted); line-height: 1.5; margin-bottom: 10px; }
+    .feedback .btn { width: auto; }
+    .storage-list { font-size: .85rem; padding-left: 20px; line-height: 1.6; color: var(--ink); }
 
     /* ───────────────────────────── Phones ──────────────────────────────────── */
     @media (max-width: 480px) {
@@ -966,6 +988,27 @@
   </div>
 </div>
 
+<!-- ───── MODAL: Navegador con almacenamiento limitado ───── -->
+<div class="modal-overlay" id="storage-modal">
+  <div class="modal" role="dialog" aria-labelledby="storage-title">
+    <div class="modal-title" id="storage-title" data-i18n="storage.title">⚠️ Este navegador limita el almacenamiento</div>
+    <div class="modal-sub" data-i18n="storage.body">Parece una ventana privada o un navegador que no deja a FileSwap guardar en disco. Puedes usarlo, pero puede que no funcione del todo bien:</div>
+    <ul class="storage-list">
+      <li id="storage-item-files">—</li>
+      <li data-i18n="storage.item.lost">Al cerrar la ventana se pierden el código de este dispositivo, tus vinculaciones y tu clipboard.</li>
+    </ul>
+    <div class="modal-sub" style="font-size:.78rem" data-i18n="storage.hint">Para archivos grandes, abre FileSwap en una ventana normal de Chrome, Edge, Firefox o Safari.</div>
+    <label class="reset-check">
+      <input type="checkbox" id="storage-hide" />
+      <span data-i18n="guide.dismiss">No volver a mostrar</span>
+    </label>
+    <div class="modal-actions">
+      <button class="btn btn-primary" id="storage-ok-btn" data-i18n="storage.ok">Entendido</button>
+      <button class="btn btn-ghost" id="storage-guide-btn" data-i18n="storage.guide">Ver la guía</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="unlink-modal">
   <div class="modal" role="dialog" aria-labelledby="unlink-title">
     <div class="modal-title" id="unlink-title" data-i18n="unlink.title">Desvincular dispositivo</div>
@@ -1017,6 +1060,13 @@
 <!-- ───── TOAST ───── -->
 <div id="toast"></div>
 
+<!-- A newer version of the app is being served -->
+<div class="update-banner" id="update-banner" role="status" hidden>
+  <span data-i18n="update.text">✨ Hay una versión nueva de FileSwap.</span>
+  <button class="btn btn-primary btn-sm" id="update-reload-btn" type="button" data-i18n="update.reload">Recargar</button>
+  <button class="icon-close" id="update-close-btn" type="button" data-i18n-title="common.close" title="Cerrar" aria-label="Cerrar">✕</button>
+</div>
+
 <script>
 'use strict';
 
@@ -1048,13 +1098,17 @@ const ABOUT = {
   email:   'xeb03sterling+fileswap@protonmail.com',  // e.g. 'tu@correo.com'
   website: 'https://aeryportfolio.wordpress.com/',  // e.g. 'https://tusitio.com'
   source:  'https://github.com/SethSterling22/SwapFile',
-  paypal:  'https://www.paypal.com/paypalme/SethSterling22',  // e.g. 'https://www.paypal.com/paypalme/TU_USUARIO' — the QR is generated from this link
+  paypal:  'https://www.paypal.com/paypalme/SethSterling22',
+  // Anonymous feedback form (Google Forms "Send" link, e.g. 'https://forms.gle/…').
+  // Empty shows the button disabled.
+  feedback: '',  // e.g. 'https://www.paypal.com/paypalme/TU_USUARIO' — the QR is generated from this link
 };
-const LEGAL_UPDATED = { es: '11 de noviembre de 2026', en: 'November 11, 2026' };
+const LEGAL_UPDATED = { es: '24 de noviembre de 2026', en: 'November 24, 2026' };
 const STORAGE_KEY        = 'fileswap_v1';
 const LEGACY_STORAGE_KEY = 'droplink_v1'; // app was called DropLink before
 const THEME_KEY          = 'fileswap_theme';
 const LANG_KEY           = 'fileswap_lang';
+const STORAGE_WARN_KEY   = 'fileswap_storage_warn_hidden';
 const UUID_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
 
 // ═══════════════════════════════════════════════════════════════
@@ -1136,6 +1190,9 @@ const I18N = {
     'toast.connectTimeout':'⚠️ No se pudo conectar con el otro dispositivo (¿un firewall bloquea WebRTC?)',
     'toast.stalled':      '⚠️ La transferencia dejó de avanzar y se canceló',
     'toast.noSpace':      '⚠️ No hay espacio suficiente en el otro dispositivo',
+    'toast.peerTooLarge': '⚠️ El otro dispositivo no puede recibir un archivo tan grande en su navegador; envíalo a un nodo con el CLI o pártelo',
+    'toast.receiveTooLarge': '⚠️ {name} es demasiado grande para recibirlo en este navegador (máx. {max}); se rechazó',
+    'toast.receiveNoSpace': '⚠️ No hay espacio en este navegador para recibir {name}; se rechazó',
     'toast.readError':    '⚠️ No se pudo leer uno de los archivos',
     'toast.emptyFolder':  'La carpeta no tiene archivos',
     'toast.received':     '✅ Archivo recibido de {name}',
@@ -1195,6 +1252,9 @@ const I18N = {
     'device.default':     'Dispositivo',
 
     'footer.guide':       'Guía rápida',
+    'update.text':        '✨ Hay una versión nueva de FileSwap.',
+    'update.reload':      'Recargar',
+    'update.wait':        'Espera a que termine la transferencia y vuelve a pulsar Recargar',
     'footer.terms':       'Términos de uso',
     'info.guide':         'Guía rápida',
     'guide.tip':          '¿Primera vez? Mira cómo funciona en un minuto.',
@@ -1226,6 +1286,17 @@ const I18N = {
     'about.donateTitle':  'Apoya el proyecto',
     'about.donateText':   'FileSwap es gratuito y sin anuncios. Si te resulta útil, puedes colaborar con una donación: escanea el código o usa el botón.',
     'about.donateBtn':    'Donar con PayPal',
+    'about.feedbackTitle': '¿Ideas, problemas o sugerencias?',
+    'about.feedbackText': 'Cuéntamelo en un formulario anónimo de un minuto: no pide tu nombre ni tu correo.',
+    'about.feedbackBtn':  '💬 Enviar feedback',
+    'about.feedbackSoon': 'El formulario estará disponible pronto',
+    'storage.title':      '⚠️ Este navegador limita el almacenamiento',
+    'storage.body':       'Parece una ventana privada o un navegador que no deja a FileSwap guardar en disco. Puedes usarlo, pero puede que no funcione del todo bien:',
+    'storage.item.files': 'Los archivos que recibas se guardan en la memoria: como máximo {max} cada uno; los más grandes se rechazarán.',
+    'storage.item.lost':  'Al cerrar la ventana se pierden el código de este dispositivo, tus vinculaciones y tu clipboard.',
+    'storage.hint':       'Para archivos grandes, abre FileSwap en una ventana normal de Chrome, Edge, Firefox o Safari.',
+    'storage.ok':         'Entendido',
+    'storage.guide':      'Ver la guía',
 
     // Server error codes
     'err.DEVICE_OFFLINE':     'El dispositivo no está conectado',
@@ -1310,6 +1381,9 @@ const I18N = {
     'toast.connectTimeout':'⚠️ Could not connect to the other device (is a firewall blocking WebRTC?)',
     'toast.stalled':      '⚠️ The transfer stopped making progress and was cancelled',
     'toast.noSpace':      '⚠️ Not enough space on the other device',
+    'toast.peerTooLarge': '⚠️ The other device cannot receive a file this big in its browser; send it to a CLI node or split it',
+    'toast.receiveTooLarge': '⚠️ {name} is too big to receive in this browser (max {max}); it was refused',
+    'toast.receiveNoSpace': '⚠️ There is no room in this browser to receive {name}; it was refused',
     'toast.readError':    '⚠️ One of the files could not be read',
     'toast.emptyFolder':  'The folder has no files',
     'toast.received':     '✅ File received from {name}',
@@ -1369,6 +1443,9 @@ const I18N = {
     'device.default':     'Device',
 
     'footer.guide':       'Quick guide',
+    'update.text':        '✨ A new version of FileSwap is available.',
+    'update.reload':      'Reload',
+    'update.wait':        'Wait until the transfer finishes, then press Reload again',
     'footer.terms':       'Terms of use',
     'info.guide':         'Quick guide',
     'guide.tip':          'First time here? See how it works in a minute.',
@@ -1400,6 +1477,17 @@ const I18N = {
     'about.donateTitle':  'Support the project',
     'about.donateText':   'FileSwap is free and ad-free. If you find it useful, you can chip in with a donation: scan the code or use the button.',
     'about.donateBtn':    'Donate with PayPal',
+    'about.feedbackTitle': 'Ideas, problems or suggestions?',
+    'about.feedbackText': 'Tell me in a one-minute anonymous form: it doesn’t ask for your name or email.',
+    'about.feedbackBtn':  '💬 Send feedback',
+    'about.feedbackSoon': 'The form will be available soon',
+    'storage.title':      '⚠️ This browser limits storage',
+    'storage.body':       'This looks like a private window, or a browser that doesn’t let FileSwap write to disk. You can use it, but it may not work quite right:',
+    'storage.item.files': 'Files you receive are kept in memory: at most {max} each; bigger ones will be refused.',
+    'storage.item.lost':  'Closing the window loses this device’s code, your pairings and your clipboard.',
+    'storage.hint':       'For big files, open FileSwap in a normal window of Chrome, Edge, Firefox or Safari.',
+    'storage.ok':         'Got it',
+    'storage.guide':      'Open the guide',
 
     'err.DEVICE_OFFLINE':     'The device is not connected',
     'err.NOT_PAIRED':         'The devices are not linked',
@@ -1564,6 +1652,7 @@ function handleServerMsg(msg) {
       state.deviceId = msg.deviceId;
       saveState();
       updateMyCard();
+      checkAppVersion(msg.app);
       break;
 
     case 'presence': {
@@ -1656,7 +1745,8 @@ const CONNECT_TIMEOUT_MS = 30000;
 const STALL_MS = 30000;   // no progress for this long → the transfer failed
 const GONE_STALL_MS = 5000; // the same once the server says the other device went offline
 const DROP_MS = 10000;    // 'disconnected' for this long → the connection is lost
-const HASH_MAX_BYTES = 512 * 1024 * 1024; // larger files are only checked by size
+// Hashing reads the whole file into memory: larger files are only checked by size
+const HASH_MAX_BYTES = (/Mobi|iPhone|iPad|Android/i.test(navigator.userAgent) ? 128 : 512) * 1024 * 1024;
 let activeTid = null;     // the transfer shown in the progress modal
 
 function newTid() {
@@ -1917,7 +2007,7 @@ async function sendSource(targetId, src) {
     if (typeof ev.data !== 'string') return;
     let msg;
     try { msg = JSON.parse(ev.data); } catch { return; }
-    if (msg.__ack) finish(msg.ok === true, msg.error === 'NO_SPACE' ? 'toast.noSpace' : 'toast.sendFailed');
+    if (msg.__ack) finish(msg.ok === true, { NO_SPACE: 'toast.noSpace', TOO_LARGE: 'toast.peerTooLarge' }[msg.error] || 'toast.sendFailed');
   };
   dc.onclose = () => finish(false, tr.open ? 'toast.connLost' : 'toast.sendError');
   dc.onerror = () => finish(false);
@@ -2111,9 +2201,97 @@ async function sha256Hex(blob) {
   return Array.from(new Uint8Array(digest), x => x.toString(16).padStart(2, '0')).join('');
 }
 
+// Where an incoming file is written. Browsers with the Origin Private File
+// System write it straight to disk, so even several GB never sit in memory;
+// the download link then points at that file. Other browsers keep it in
+// memory, up to MEMORY_RECEIVE_LIMIT. Files from a previous session are
+// unreachable (the received list lives in memory) and are cleared at start.
+const IS_MOBILE = /Mobi|iPhone|iPad|Android/i.test(navigator.userAgent);
+const MEMORY_RECEIVE_LIMIT = (IS_MOBILE ? 512 : 1536) * 1024 * 1024;
+const CAN_STREAM_TO_DISK = !!(navigator.storage?.getDirectory && window.FileSystemFileHandle &&
+  'createWritable' in FileSystemFileHandle.prototype);
+
+async function incomingDir() {
+  const root = await navigator.storage.getDirectory();
+  return root.getDirectoryHandle('incoming', { create: true });
+}
+
+async function clearIncoming() {
+  if (!navigator.storage?.getDirectory) return;
+  try { await (await navigator.storage.getDirectory()).removeEntry('incoming', { recursive: true }); } catch {}
+}
+
+// Whether this browser can really write received files to disk: private
+// windows refuse it or give only a small quota.
+async function diskStorageWorks() {
+  if (!CAN_STREAM_TO_DISK) return false;
+  try {
+    const root = await navigator.storage.getDirectory();
+    const h = await root.getFileHandle('fileswap-probe', { create: true });
+    const w = await h.createWritable();
+    await w.write(new Uint8Array(1));
+    await w.close();
+    await root.removeEntry('fileswap-probe');
+    const est = await navigator.storage.estimate?.();
+    return !(est?.quota && est.quota < 1024 * 1024 * 1024);
+  } catch {
+    return false;
+  }
+}
+
+// Warns once (per browser, until "don't show again") that files are kept in memory here
+async function checkStorage() {
+  if (localStorage.getItem(STORAGE_WARN_KEY) === '1' || await diskStorageWorks()) return;
+  // Don't cover a pairing request or another dialog: wait until it is closed
+  while (document.querySelector('.modal-overlay.open')) await new Promise((r) => setTimeout(r, 1000));
+  document.getElementById('storage-item-files').textContent = t('storage.item.files', { max: fmtBytes(MEMORY_RECEIVE_LIMIT) });
+  document.getElementById('storage-hide').checked = false;
+  openModal('storage-modal');
+}
+
+function closeStorageModal() {
+  if (document.getElementById('storage-hide').checked) {
+    try { localStorage.setItem(STORAGE_WARN_KEY, '1'); } catch {}
+  }
+  closeModal('storage-modal');
+}
+
+// Returns { write(chunk), finish() → Blob, abort() } or { error: 'NO_SPACE' | 'TOO_LARGE' }
+async function createSink(tid, expectedSize, type) {
+  if (CAN_STREAM_TO_DISK) {
+    try {
+      const est = await navigator.storage.estimate?.();
+      if (est?.quota && est.quota - (est.usage || 0) < expectedSize * 1.02) return { error: 'NO_SPACE' };
+      const dir = await incomingDir();
+      const handle = await dir.getFileHandle(tid, { create: true });
+      const w = await handle.createWritable();
+      return {
+        disk: true,
+        write: (chunk) => w.write(chunk),
+        finish: async () => { await w.close(); return new Blob([await handle.getFile()], { type }); },
+        abort: async () => {
+          try { await w.abort(); } catch {}
+          try { await dir.removeEntry(tid); } catch {}
+        },
+      };
+    } catch (err) {
+      console.warn('disk sink', err); // e.g. private browsing: fall back to memory
+    }
+  }
+  if (expectedSize > MEMORY_RECEIVE_LIMIT) return { error: 'TOO_LARGE' };
+  let parts = [];
+  return {
+    disk: false,
+    write: (chunk) => { parts.push(chunk); },
+    finish: async () => new Blob(parts, { type }),
+    abort: async () => { parts = []; },
+  };
+}
+
 function setupReceiveChannel(dc, fromId, tid) {
   let meta = null;
-  let buffers = [];
+  let sink = null;
+  let chain = Promise.resolve(); // disk writes, in order
   let received = 0;
   let done = false;
   let lastData = Date.now();
@@ -2123,52 +2301,62 @@ function setupReceiveChannel(dc, fromId, tid) {
 
   dc.binaryType = 'arraybuffer';
 
+  const sendAck = (ack) => { try { dc.send(JSON.stringify({ __ack: true, ...ack })); } catch {} };
   const watchdog = setInterval(() => {
     if (meta && !done && Date.now() - lastData > stallLimit(tr)) {
       failTransfer(tid, tr?.peerGone ? 'toast.connLost' : 'toast.stalled', { notify: true });
     }
   }, 1000);
-  const fail = (key) => {
+  const fail = (key, vars) => {
     if (done) return;
     done = true;
-    buffers = [];
     clearInterval(watchdog);
+    sink?.abort();
     if (activeTid === tid) activeTid = null;
     if (meta) {
       closeModal('transfer-modal');
-      toast(t(key));
+      toast(t(key, vars));
     }
   };
   if (tr) tr.fail = fail;
 
+  // Refuses right after meta: the sender stops at once (early ack)
+  function refuse(error) {
+    sendAck({ ok: false, received: 0, error });
+    fail(error === 'TOO_LARGE' ? 'toast.receiveTooLarge' : 'toast.receiveNoSpace',
+      { name: meta.name, max: fmtBytes(MEMORY_RECEIVE_LIMIT) });
+    setTimeout(() => endTransfer(tid), 3000);
+  }
+
   async function finish(end) {
+    if (done) return;
     done = true;
     clearInterval(watchdog);
     if (activeTid === tid) activeTid = null;
-    const blob = new Blob(buffers, { type: meta.type });
-    buffers = [];
+    let blob = null;
+    let error;
+    try {
+      blob = await sink.finish();
+    } catch (err) {
+      console.warn('receive', err);
+      error = 'WRITE_FAILED';
+    }
     // A ZIP built while sending announces size -1; the end frame has the real one
     const expected = meta.size >= 0 ? meta.size : end.size;
-    let ok = received === expected && (end.size === undefined || end.size === received);
-    let error = ok ? undefined : 'SIZE_MISMATCH';
+    if (!error && (received !== expected || (end.size !== undefined && end.size !== received))) error = 'SIZE_MISMATCH';
     let hash = null;
-    if (ok) {
+    if (!error) {
       try { hash = await sha256Hex(blob); } catch {}
-      if (hash && typeof end.sha256 === 'string' && end.sha256.toLowerCase() !== hash) {
-        ok = false;
-        error = 'HASH_MISMATCH';
-      }
+      if (hash && typeof end.sha256 === 'string' && end.sha256.toLowerCase() !== hash) error = 'HASH_MISMATCH';
     }
-    const ack = { __ack: true, ok, received };
-    if (hash) ack.sha256 = hash;
-    if (error) ack.error = error;
-    try { dc.send(JSON.stringify(ack)); } catch {}
+    sendAck({ ok: !error, received, ...(hash ? { sha256: hash } : {}), ...(error ? { error } : {}) });
 
     closeModal('transfer-modal');
-    if (ok) {
+    if (!error) {
       addReceivedFile({ name: meta.name, size: received, blob, url: URL.createObjectURL(blob) });
       toast(t(meta.clip ? 'toast.clipReceived' : 'toast.received', { name: fromName }));
     } else {
+      sink.abort();
       toast(t('toast.receiveError'));
     }
     // The sender closes the connection when it gets the ack; this is a fallback
@@ -2182,7 +2370,7 @@ function setupReceiveChannel(dc, fromId, tid) {
       let parsed;
       try { parsed = JSON.parse(ev.data); } catch { return; }
       if (parsed.__end) {
-        if (meta) finish(parsed);
+        if (meta) chain = chain.then(() => finish(parsed));
         return;
       }
       // Metadata frame
@@ -2195,10 +2383,21 @@ function setupReceiveChannel(dc, fromId, tid) {
       };
       activeTid = tid;
       openTransferModal('transfer.receiving', meta.name);
+      const expected = meta.size >= 0 ? meta.size : meta.approx;
+      chain = createSink(tid, expected, meta.type).then((s) => {
+        if (done) s.abort?.(); // cancelled while the file was being created
+        else if (s.error) refuse(s.error);
+        else sink = s;
+      });
     } else if (meta) {
       // Binary chunk
-      buffers.push(ev.data);
-      received += ev.data.byteLength;
+      const chunk = ev.data;
+      received += chunk.byteLength;
+      chain = chain.then(() => (sink && !done ? sink.write(chunk) : null)).catch((err) => {
+        console.warn('receive write', err);
+        sendAck({ ok: false, received, error: 'WRITE_FAILED' });
+        fail('toast.receiveError');
+      });
       if (meta.size >= 0) {
         const pct = meta.size ? Math.min(100, Math.round((received / meta.size) * 100)) : 100;
         updateProgress(pct, `${pct}% — ${fmtBytes(received)} / ${fmtBytes(meta.size)}`);
@@ -2852,7 +3051,6 @@ const LEGAL = {
       <hr></hr>
       <ul>
         <li><strong>Google</strong> (servidores STUN): ayudan a establecer la conexión directa y ven tu IP pública.</li>
-        <li><strong>Cloudflare</strong> (cdnjs): sirve la librería que dibuja los códigos QR y ve tu IP al descargarla.</li>
         <li><strong>El otro dispositivo</strong>: en una conexión directa, cada parte puede ver la dirección IP de la otra.</li>
         <li><strong>PayPal</strong>: solo si usas el enlace de donación; se rige por su propia política de privacidad.</li>
       </ul>
@@ -2921,7 +3119,6 @@ const LEGAL = {
       <hr></hr>
       <ul>
         <li><strong>Google</strong> (STUN servers): help set up the direct connection and see your public IP.</li>
-        <li><strong>Cloudflare</strong> (cdnjs): serves the library that draws the QR codes and sees your IP when downloading it.</li>
         <li><strong>The other device</strong>: in a direct connection, each side can see the other’s IP address.</li>
         <li><strong>PayPal</strong>: only if you use the donation link; its own privacy policy applies.</li>
       </ul>
@@ -2965,6 +3162,13 @@ function aboutHtml() {
       ${link(ABOUT.website, 'about.website')}
       ${link(ABOUT.source, 'about.source')}
     </div>
+    <div class="feedback">
+      <h3>${t('about.feedbackTitle')}</h3>
+      <p>${t('about.feedbackText')}</p>
+      ${safeUrl(ABOUT.feedback)
+        ? `<a class="btn btn-ghost btn-sm" href="${escHtml(safeUrl(ABOUT.feedback))}" target="_blank" rel="noopener">${t('about.feedbackBtn')}</a>`
+        : `<button class="btn btn-ghost btn-sm" type="button" disabled title="${t('about.feedbackSoon')}">${t('about.feedbackBtn')}</button>`}
+    </div>
     ${paypal ? `
     <div class="donate">
       <div class="donate-qr" id="donate-qr"></div>
@@ -2974,6 +3178,21 @@ function aboutHtml() {
         <a class="btn btn-primary" href="${escHtml(paypal)}" target="_blank" rel="noopener">${t('about.donateBtn')}</a>
       </div>
     </div>` : ''}`;
+}
+
+// ─── New version notice ───────────────────────────────────────────────────
+// The server puts a hash of index.html in the page and sends it on register.
+// A tab opened before an update gets a different one: it offers to reload.
+const APP_VERSION = document.querySelector('meta[name="fileswap-version"]')?.content || '';
+
+function checkAppVersion(serverVersion) {
+  if (!serverVersion || !APP_VERSION || APP_VERSION.startsWith('__')) return; // not served by the FileSwap server
+  if (serverVersion !== APP_VERSION) document.getElementById('update-banner').hidden = false;
+}
+
+function reloadForUpdate() {
+  if (transfers.size > 0) { toast(t('update.wait')); return; } // don't cut a transfer
+  location.reload();
 }
 
 // ─── Quick guide (footer, setup screen, first-run tip) ────────────────────
@@ -2992,6 +3211,13 @@ const GUIDE = {
       <li><strong>En un equipo que no es tuyo,</strong> al terminar usa «🧹 Borrar todo y empezar de cero», al final de la página.</li>
       <li><strong>En un servidor Linux,</strong> instala el programa de línea de comandos:<br><code>${CLI_INSTALL}</code><br>y sigue la <a href="${CLI_GUIDE_URL}" target="_blank" rel="noopener">guía de instalación</a>.</li>
     </ol>
+    <h3>Dónde se guarda cada cosa</h3>
+    <ul>
+      <li><strong>Archivos recibidos:</strong> mientras llegan se escriben en un espacio privado del navegador para esta web, no en la memoria, así que pueden ser de varios GB. No van a tu carpeta de Descargas hasta que pulses ⬇, y se borran al recargar o cerrar la página: descárgalos antes.</li>
+      <li><strong>En una ventana privada</strong> o un navegador sin ese espacio, se guardan en la memoria: hasta 1,5 GB (512 MB en el móvil). Los más grandes se rechazan antes de empezar, y quien envía lo ve.</li>
+      <li><strong>Tu código, tus vinculaciones y tu clipboard</strong> se guardan en este navegador. En una ventana privada se pierden al cerrarla; «🧹 Borrar todo» los elimina.</li>
+      <li><strong>Nada de esto se sube al servidor.</strong></li>
+    </ul>
     <p style="margin-top:12px">⚠️ Las transferencias van cifradas entre los dispositivos, pero todavía no hay cifrado de extremo a extremo propio: no lo uses para datos médicos, contraseñas ni claves.</p>`,
   en: () => `
     <p class="summary">FileSwap moves files and texts straight between your devices. The server only introduces them; what you send never goes through it.</p>
@@ -3003,6 +3229,13 @@ const GUIDE = {
       <li><strong>On a computer that isn’t yours,</strong> when you are done use “🧹 Delete everything and start over” at the bottom of the page.</li>
       <li><strong>On a Linux server,</strong> install the command-line program:<br><code>${CLI_INSTALL}</code><br>and follow the <a href="${CLI_GUIDE_URL}" target="_blank" rel="noopener">install guide</a>.</li>
     </ol>
+    <h3>Where things are kept</h3>
+    <ul>
+      <li><strong>Received files</strong> are written, as they arrive, to a private browser space for this site instead of memory, so they can be several GB. They don’t reach your Downloads folder until you press ⬇, and they are deleted when you reload or close the page: download them first.</li>
+      <li><strong>In a private window,</strong> or a browser without that space, they are kept in memory: up to 1.5 GB (512 MB on phones). Bigger ones are refused before they start, and the sender is told.</li>
+      <li><strong>Your code, your pairings and your clipboard</strong> are kept in this browser. In a private window they are lost when you close it; “🧹 Delete everything” removes them.</li>
+      <li><strong>None of it is uploaded to the server.</strong></li>
+    </ul>
     <p style="margin-top:12px">⚠️ Transfers are encrypted between the devices, but there is no end-to-end encryption of our own yet: don’t use it for medical data, passwords or keys.</p>`,
 };
 
@@ -3029,7 +3262,8 @@ async function resetEverything(unpair) {
   for (const tid of [...transfers.keys()]) endTransfer(tid);
   try { ws?.close(1000, 'reset'); } catch {}
   for (const f of receivedFiles) URL.revokeObjectURL(f.url);
-  for (const k of [STORAGE_KEY, LEGACY_STORAGE_KEY, THEME_KEY, LANG_KEY, GUIDE_KEY]) {
+  await clearIncoming();
+  for (const k of [STORAGE_KEY, LEGACY_STORAGE_KEY, THEME_KEY, LANG_KEY, GUIDE_KEY, STORAGE_WARN_KEY]) {
     try { localStorage.removeItem(k); } catch {}
   }
   try {
@@ -3317,6 +3551,10 @@ const closePeerClip = () => { clipView = null; closeModal('clip-modal'); };
 document.getElementById('clip-close-btn').addEventListener('click', closePeerClip);
 document.getElementById('clip-x-btn').addEventListener('click', closePeerClip);
 
+// New version banner
+document.getElementById('update-reload-btn').addEventListener('click', reloadForUpdate);
+document.getElementById('update-close-btn').addEventListener('click', () => { document.getElementById('update-banner').hidden = true; });
+
 // Quick guide tip and start over
 document.getElementById('guide-tip-open').addEventListener('click', () => { hideGuideTip(); openInfo('guide'); });
 document.getElementById('guide-tip-close').addEventListener('click', hideGuideTip);
@@ -3325,6 +3563,8 @@ document.getElementById('reset-btn').addEventListener('click', () => {
   openModal('reset-modal');
 });
 document.getElementById('reset-cancel-btn').addEventListener('click', () => closeModal('reset-modal'));
+document.getElementById('storage-ok-btn').addEventListener('click', closeStorageModal);
+document.getElementById('storage-guide-btn').addEventListener('click', () => { closeStorageModal(); openInfo('guide'); });
 document.getElementById('reset-confirm-btn').addEventListener('click', (e) => {
   e.target.disabled = true;
   resetEverything(document.getElementById('reset-unpair').checked);
@@ -3364,6 +3604,8 @@ function bootApp() {
   renderPeers();
   renderMyClip();
   setInterval(renderMyClip, 10 * 60 * 1000); // drops expired items
+  // Files received in an earlier session can no longer be reached; then check the disk works
+  clearIncoming().then(checkStorage);
   showScreen('screen-home');
   connectWS();
   checkPairParam();

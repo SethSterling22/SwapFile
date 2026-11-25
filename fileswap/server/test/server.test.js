@@ -188,3 +188,65 @@ test('health endpoint responds', async () => {
   assert.equal(res.status, 200);
   assert.equal((await res.json()).status, 'ok');
 });
+
+// Opens a raw WebSocket and resolves with 'open' or the HTTP status of the refusal
+function tryConnect(port, headers = {}) {
+  return new Promise(resolve => {
+    const ws = new WebSocket(`ws://localhost:${port}/ws`, { headers });
+    ws.on('open', () => resolve({ ok: true, ws }));
+    ws.on('unexpected-response', (_req, res) => resolve({ ok: false, status: res.statusCode }));
+    ws.on('error', () => {});
+  });
+}
+
+test('the WebSocket refuses other websites but not the CLI (no Origin)', async () => {
+  const own = await tryConnect(srv.port, { Origin: `http://localhost:${srv.port}` });
+  assert.ok(own.ok, 'same-site origin accepted');
+  own.ws.close();
+  const cli = await tryConnect(srv.port);
+  assert.ok(cli.ok, 'no Origin (CLI) accepted');
+  cli.ws.close();
+  const evil = await tryConnect(srv.port, { Origin: 'https://evil.example' });
+  assert.equal(evil.status, 403);
+});
+
+test('connections per IP are limited; behind a proxy the last X-Forwarded-For hop counts', async () => {
+  const s = await startServer({ MAX_CONN_PER_IP: '2', TRUST_PROXY: '1' });
+  try {
+    const a = await tryConnect(s.port, { 'X-Forwarded-For': '203.0.113.9, 198.51.100.1' });
+    const b = await tryConnect(s.port, { 'X-Forwarded-For': '198.51.100.1' });
+    const c = await tryConnect(s.port, { 'X-Forwarded-For': '10.0.0.5, 198.51.100.1' });
+    assert.ok(a.ok && b.ok);
+    assert.equal(c.status, 429, 'third connection from the same client IP refused');
+    const other = await tryConnect(s.port, { 'X-Forwarded-For': '198.51.100.2' });
+    assert.ok(other.ok, 'another IP still accepted');
+    a.ws.close(); b.ws.close(); other.ws.close();
+    await wait(100);
+    const again = await tryConnect(s.port, { 'X-Forwarded-For': '198.51.100.1' });
+    assert.ok(again.ok, 'slots are released when connections close');
+    again.ws.close();
+  } finally {
+    s.proc.kill();
+  }
+});
+
+test('the page has security headers, a CSP that allows its own inline scripts, and its version', async () => {
+  const res = await fetch(`http://localhost:${srv.port}/`);
+  const html = await res.text();
+  const csp = res.headers.get('content-security-policy');
+  assert.match(csp, /frame-ancestors 'none'/);
+  assert.match(csp, /script-src 'self' 'sha256-/);
+  assert.doesNotMatch(csp, /script-src[^;]*unsafe-inline/);
+  assert.equal(res.headers.get('x-frame-options'), 'DENY');
+  assert.equal(res.headers.get('x-content-type-options'), 'nosniff');
+  const health = await (await fetch(`http://localhost:${srv.port}/health`)).json();
+  assert.match(health.version, /^[0-9a-f]{12}$/);
+  assert.ok(html.includes(`content="${health.version}"`), 'version injected in the page');
+  for (const [, body] of html.matchAll(/<script>([\s\S]*?)<\/script>/g)) {
+    const h = crypto.createHash('sha256').update(body, 'utf8').digest('base64');
+    assert.ok(csp.includes(`'sha256-${h}'`), 'every inline script is allowed by hash');
+  }
+  const a = await device(srv.port);
+  assert.ok(got(a, m => m.type === 'registered' && m.app === health.version));
+  a.close();
+});

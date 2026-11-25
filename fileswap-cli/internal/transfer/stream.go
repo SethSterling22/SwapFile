@@ -39,8 +39,10 @@ const (
 // Transfer error codes (beyond the Ack ones in frames.go).
 const (
 	ErrNoSpace = "NO_SPACE"
-	ErrStalled = "STALLED"
-	ErrNoAck   = "NO_ACK"
+	// ErrTooLarge comes only from browsers that cannot write to disk while receiving.
+	ErrTooLarge = "TOO_LARGE"
+	ErrStalled  = "STALLED"
+	ErrNoAck    = "NO_ACK"
 )
 
 // Error is a transfer failure with a protocol code.
