@@ -25,7 +25,16 @@ const SESSION_TTL_MS  = parseInt(process.env.SESSION_TTL_MS  ?? '1800000', 10); 
 const MAX_MSG_BYTES   = parseInt(process.env.MAX_MSG_BYTES   ?? '16384',  10); // 16 KB
 const MAX_SESSIONS    = parseInt(process.env.MAX_SESSIONS    ?? '50000',  10);
 const RATE_LIMIT      = parseInt(process.env.RATE_LIMIT_PER_MIN ?? '120', 10);
-const CORS_ORIGIN     = process.env.CORS_ORIGIN ?? '*';
+// The web client is served from this same server, so no CORS header is needed;
+// set CORS_ORIGIN only if another site must read /health.
+const CORS_ORIGIN     = process.env.CORS_ORIGIN ?? '';
+// Extra origins allowed to open the WebSocket besides this site itself (comma-separated)
+const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS ?? '').split(',').map(s => s.trim()).filter(Boolean);
+// Behind a reverse proxy (Caddy…): take the client IP from X-Forwarded-For and
+// send HSTS when the proxy says the request was HTTPS. Only enable it when a
+// proxy really sits in front, or clients could fake their IP.
+const TRUST_PROXY     = ['1', 'true', 'yes'].includes(String(process.env.TRUST_PROXY ?? '').toLowerCase());
+const MAX_CONN_PER_IP = parseInt(process.env.MAX_CONN_PER_IP ?? '20', 10);
 
 const MAX_PENDING     = 20; // max unanswered pair-requests queued per device
 
@@ -83,38 +92,100 @@ const MIME = {
   '.json': 'application/json',
 };
 
+// index.html is read again when it changes on disk. Its hash is the app
+// version: injected into the page and sent on register, so open tabs can tell
+// they are outdated after an update.
+let indexCache = { mtimeMs: -1, html: '', version: '' };
+function loadIndex() {
+  const file = path.join(CLIENT_DIR, 'index.html');
+  const { mtimeMs } = fs.statSync(file);
+  if (mtimeMs !== indexCache.mtimeMs) {
+    const raw = fs.readFileSync(file, 'utf8');
+    const version = crypto.createHash('sha256').update(raw).digest('hex').slice(0, 12);
+    const html = raw.replace('__FILESWAP_VERSION__', version);
+    // The page's inline scripts are allowed by hash, so no 'unsafe-inline' for scripts
+    const scriptHashes = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)]
+      .map(m => `'sha256-${crypto.createHash('sha256').update(m[1], 'utf8').digest('base64')}'`);
+    indexCache = { mtimeMs, html, version, scriptHashes };
+  }
+  return indexCache;
+}
+
+function appVersion() {
+  try { return loadIndex().version; } catch { return ''; }
+}
+
+function clientIp(req) {
+  if (TRUST_PROXY) {
+    // The proxy appends the address it saw last; earlier entries come from the client
+    const parts = String(req.headers['x-forwarded-for'] ?? '').split(',').map(s => s.trim()).filter(Boolean);
+    if (parts.length) return parts[parts.length - 1];
+  }
+  return req.socket.remoteAddress;
+}
+
+function setSecurityHeaders(req, res) {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Referrer-Policy', 'no-referrer');
+  res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=()');
+  if (TRUST_PROXY && req.headers['x-forwarded-proto'] === 'https') {
+    res.setHeader('Strict-Transport-Security', 'max-age=31536000');
+  }
+}
+
+function sendIndex(req, res) {
+  let page;
+  try { page = loadIndex(); } catch { res.writeHead(404); res.end('Not found'); return; }
+  const host = String(req.headers.host ?? '').replace(/[^\w.:\[\]-]/g, '');
+  res.setHeader('Content-Security-Policy', [
+    "default-src 'self'",
+    `script-src 'self' ${page.scriptHashes.join(' ')}`,
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: blob:",
+    `connect-src 'self' ws://${host} wss://${host}`,
+    "media-src 'self' blob:",
+    "object-src 'none'",
+    "base-uri 'none'",
+    "form-action 'self'",
+    "frame-ancestors 'none'",
+  ].join('; '));
+  res.setHeader('Cache-Control', 'no-cache'); // always revalidate: updates show up on reload
+  res.writeHead(200, { 'Content-Type': MIME['.html'] });
+  res.end(page.html);
+}
+
 const server = http.createServer((req, res) => {
-  // CORS headers
-  res.setHeader('Access-Control-Allow-Origin', CORS_ORIGIN);
-  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  if (CORS_ORIGIN) {
+    res.setHeader('Access-Control-Allow-Origin', CORS_ORIGIN);
+    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  }
+  setSecurityHeaders(req, res);
 
   if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
+  if (req.method !== 'GET' && req.method !== 'HEAD') { res.writeHead(405); res.end(); return; }
 
   // Health check
   if (req.url === '/health') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ status: 'ok', devices: devices.size }));
+    res.end(JSON.stringify({ status: 'ok', devices: devices.size, version: appVersion() }));
     return;
   }
 
   // Static file serving
-  let filePath = path.join(CLIENT_DIR, req.url === '/' ? 'index.html' : req.url.split('?')[0]);
+  const urlPath = req.url.split('?')[0];
+  if (urlPath === '/' || urlPath === '/index.html') { sendIndex(req, res); return; }
+  const filePath = path.join(CLIENT_DIR, urlPath);
 
   // Prevent directory traversal
-  if (!filePath.startsWith(CLIENT_DIR)) {
+  if (!filePath.startsWith(CLIENT_DIR + path.sep)) {
     res.writeHead(403); res.end(); return;
   }
 
   fs.readFile(filePath, (err, data) => {
-    if (err) {
-      // SPA fallback — always serve index.html for unknown routes (handles ?pair= links)
-      fs.readFile(path.join(CLIENT_DIR, 'index.html'), (err2, html) => {
-        if (err2) { res.writeHead(404); res.end('Not found'); return; }
-        res.writeHead(200, { 'Content-Type': MIME['.html'] });
-        res.end(html);
-      });
-      return;
-    }
+    // SPA fallback — serve index.html for unknown routes (handles ?pair= links)
+    if (err) { sendIndex(req, res); return; }
     const ext = path.extname(filePath);
     res.writeHead(200, { 'Content-Type': MIME[ext] ?? 'application/octet-stream' });
     res.end(data);
@@ -122,13 +193,35 @@ const server = http.createServer((req, res) => {
 });
 
 // ─── WebSocket server ───────────────────────────────────────────────────────
-const wss = new WebSocketServer({ server, path: '/ws', maxPayload: MAX_MSG_BYTES });
+// Browsers always send Origin: it must be this site (same host as the request)
+// or one of ALLOWED_ORIGINS, so other websites cannot use this server through a
+// visitor's browser. Non-browser clients such as the CLI send no Origin.
+function originAllowed(req) {
+  const origin = req.headers.origin;
+  if (!origin) return true;
+  if (ALLOWED_ORIGINS.includes(origin)) return true;
+  try { return new URL(origin).host === req.headers.host; } catch { return false; }
+}
+
+const connsPerIp = new Map(); // ip → open WebSockets
+
+const wss = new WebSocketServer({
+  server,
+  path: '/ws',
+  maxPayload: MAX_MSG_BYTES,
+  verifyClient: ({ req }, done) => {
+    if (!originAllowed(req)) return done(false, 403, 'Origin not allowed');
+    if ((connsPerIp.get(clientIp(req)) ?? 0) >= MAX_CONN_PER_IP) return done(false, 429, 'Too many connections');
+    done(true);
+  },
+});
 
 wss.on('connection', (ws, req) => {
   let deviceId = null;
   let msgCount = 0;
   let resetAt  = Date.now() + 60_000;
-  const ip = req.headers['x-forwarded-for']?.split(',')[0].trim() ?? req.socket.remoteAddress;
+  const ip = clientIp(req);
+  connsPerIp.set(ip, (connsPerIp.get(ip) ?? 0) + 1);
 
   // ── Helpers ──────────────────────────────────────────────────────────────
   function sendSelf(payload)  { send(ws, payload); }
@@ -239,7 +332,8 @@ wss.on('connection', (ws, req) => {
           entry.pairedIds = new Set(msg.pairedIds.filter(p => typeof p === 'string' && ID_RE.test(p) && p !== id));
         }
 
-        sendSelf({ type: 'registered', deviceId });
+        // `app` lets web clients notice that a newer version is being served
+        sendSelf({ type: 'registered', deviceId, app: appVersion() });
 
         // Exchange presence only with devices that also list us as paired
         for (const [pairedId, peer] of mutualPeers(deviceId)) {
@@ -348,7 +442,11 @@ wss.on('connection', (ws, req) => {
 
   // ── Disconnect ─────────────────────────────────────────────────────────
   // Only clean up if this socket still owns the entry (not replaced by a reconnect)
-  ws.on('close', () => { if (self()) cleanup(deviceId); });
+  ws.on('close', () => {
+    const n = (connsPerIp.get(ip) ?? 1) - 1;
+    if (n > 0) connsPerIp.set(ip, n); else connsPerIp.delete(ip);
+    if (self()) cleanup(deviceId);
+  });
   ws.on('error', (err) => { console.error(`[ws] ${ip} error:`, err.message); });
 });
 

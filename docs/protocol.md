@@ -52,7 +52,7 @@ Endpoint: `ws://<host>:<port>/ws` (or `wss://` behind TLS). Every message is a J
 
 | `type` | Fields | Meaning |
 |---|---|---|
-| `registered` | `deviceId` | Registration accepted; `deviceId` is this node's code |
+| `registered` | `deviceId`, `app` | Registration accepted; `deviceId` is this node's code. `app` is the version of the web app the server serves now (a hash of `index.html`): a browser tab whose page has another version offers to reload |
 | `presence` | `deviceId`, `name`, `kind`, `online` | A mutually paired device came online / went offline (also sent for each online peer right after `register`) |
 | `pair-request` | `from: {id, name, kind}` | Someone wants to pair with this node |
 | `pair-accepted` | `from: {id, name, kind}` | Our request was accepted. Add `from.id` to the local pairs and re-`register` |
@@ -123,13 +123,13 @@ receiver → sender   text    ack     {"__ack":true,"ok":true,"received":48213,"
 | meta | `name` (string), `size` (bytes, integer ≥ 0, or `-1` when not known yet — a ZIP built while sending), `type` (MIME, default `application/octet-stream`), `v` *(v1)* protocol version, `approx` (with `size: -1`: the bytes of the files being zipped, an upper bound used for the free-space check and progress), `items` (number of files in a ZIP, informative) |
 | chunk | Raw bytes, at most 16 384. Senders should apply backpressure (the web client waits while `bufferedAmount` > 256 KB) |
 | end | `__end: true`; `size` — total bytes sent (required when `meta.size` was `-1`); `sha256` *(v1, optional)* — lowercase hex SHA-256 of the whole file |
-| ack *(v1)* | `__ack: true`; `ok`; `received` (bytes); `sha256` (optional, as computed by the receiver); `error` when `ok` is false: `SIZE_MISMATCH`, `HASH_MISMATCH`, `WRITE_FAILED`, `NO_SPACE` |
+| ack *(v1)* | `__ack: true`; `ok`; `received` (bytes); `sha256` (optional, as computed by the receiver); `error` when `ok` is false: `SIZE_MISMATCH`, `HASH_MISMATCH`, `WRITE_FAILED`, `NO_SPACE`, `TOO_LARGE` (a browser that cannot write to disk while receiving and would have to hold the file in memory) |
 
 Rules:
 
 - The receiver checks `received == meta.size` (or `== end.size` when `meta.size` was `-1`, and `end.size` must match what arrived whenever it is sent). If both sides have a hash (end's `sha256` and its own), they must match. The result goes in the ack.
 - The sender treats the transfer as done **only after `ack.ok == true`**, then closes the connection. The CLI exits non-zero on `ok: false` or a missing ack.
-- An ack can come **before** `end`: a receiver that cannot take the file (e.g. `NO_SPACE`, checked against free disk space as soon as `meta` arrives, or more bytes than announced) acks `ok: false` right away and the sender stops.
+- An ack can come **before** `end`: a receiver that cannot take the file (e.g. `NO_SPACE`, checked against free disk space — or the browser's storage quota — as soon as `meta` arrives, `TOO_LARGE`, or more bytes than announced) acks `ok: false` right away and the sender stops.
 - `sha256` is optional because browsers have no Web Crypto on plain HTTP (only on HTTPS or `localhost`), and the web client only hashes files up to 512 MB. The CLI always sends and checks it.
 - **Receivers must never use `meta.name` as a path.** The CLI keeps only the last path component, removes control characters and leading dots, and never overwrites an existing file (`name (1).ext`). Browsers hand the name to the download attribute, which the browser sanitizes.
 

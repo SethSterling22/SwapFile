@@ -37,7 +37,7 @@ jobs:
       - name: gofmt
         run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
       - name: shellcheck install.sh
-        run: shellcheck install.sh packaging/smoke.sh
+        run: shellcheck install.sh packaging/smoke.sh packaging/e2e.sh
       - run: make test
 
   package:
@@ -62,6 +62,8 @@ jobs:
       - run: make release VERSION="$VERSION"
       - name: Install and run in debian:stable and archlinux:latest
         run: ./packaging/smoke.sh
+      - name: End to end, Debian ⇄ Arch through the server image (pair, files, ZIP, clipboard)
+        run: ./packaging/e2e.sh
       - uses: actions/upload-artifact@v4
         with:
           name: fileswap-release
