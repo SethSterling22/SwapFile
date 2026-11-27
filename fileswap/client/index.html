@@ -831,7 +831,7 @@
       <!-- Start over: wipe this browser's FileSwap data -->
       <div class="reset-zone">
         <div class="reset-text" data-i18n="reset.hint">¿Usaste un equipo que no es tuyo? Al terminar, borra todo lo de FileSwap en este navegador.</div>
-        <button class="btn btn-ghost btn-sm reset-btn" id="reset-btn" type="button" data-i18n="reset.button">🧹 Borrar todo y empezar de cero</button>
+        <button class="btn btn-ghost btn-sm reset-btn" id="reset-btn" type="button" data-i18n="reset.button">🧹 Desincronizar y reiniciar sesión</button>
       </div>
 
     </div>
@@ -1274,7 +1274,7 @@ const I18N = {
     'guide.dismiss':      'No volver a mostrar',
     'guide.how':          '¿Cómo funciona? Guía rápida',
     'reset.hint':         '¿Usaste un equipo que no es tuyo? Al terminar, borra todo lo de FileSwap en este navegador.',
-    'reset.button':       '🧹 Borrar todo y empezar de cero',
+    'reset.button':       '🧹 Desincronizar y reiniciar sesión',
     'reset.title':        'Borrar todo en este navegador',
     'reset.body':         'FileSwap volverá a empezar desde cero aquí. Se borra:',
     'reset.item.identity':'El código y el nombre de este dispositivo',
@@ -1465,7 +1465,7 @@ const I18N = {
     'guide.dismiss':      'Don’t show again',
     'guide.how':          'How does it work? Quick guide',
     'reset.hint':         'Used a computer that isn’t yours? When you are done, delete everything FileSwap keeps in this browser.',
-    'reset.button':       '🧹 Delete everything and start over',
+    'reset.button':       '🧹 Desynchronize and restart session',
     'reset.title':        'Delete everything in this browser',
     'reset.body':         'FileSwap will start from scratch here. This deletes:',
     'reset.item.identity':'This device’s code and name',
@@ -3042,7 +3042,7 @@ const LEGAL = {
       <hr></hr>
       <p>Estos términos pueden actualizarse; la fecha de arriba indica la versión vigente. Seguir usando FileSwap después de un cambio implica aceptarlo.</p>`,
     privacy: (contact) => `
-      <p class="summary">FileSwap no tiene cuentas, no usa cookies ni analítica, y el servidor nunca recibe el contenido de tus archivos.</p>
+      <p class="summary">FileSwap no tiene cuentas ni usa cookies o analítica de terceros. El servidor nunca recibe el contenido de tus archivos y solo lleva totales de uso anónimos.</p>
       <h3>1. Tus archivos</h3>
       <hr></hr>
       <p>Viajan directamente de un navegador a otro por WebRTC, cifrados en tránsito (DTLS). No pasan por el servidor ni se almacenan en él. En el dispositivo que los recibe se quedan en la memoria de la pestaña hasta que la cierras o la recargas, salvo que los descargues.</p>
@@ -3056,24 +3056,34 @@ const LEGAL = {
         <li>los mensajes técnicos que abren la conexión directa (SDP/ICE), que contienen direcciones de red.</li>
       </ul>
       <p>Esta información se borra al desconectarte o cuando se reinicia el servidor; no hay base de datos. Los registros técnicos de errores del servidor pueden incluir tu dirección IP.</p>
-      <p>Para saber cuánto se usa FileSwap, el servidor lleva contadores agregados y anónimos: cuántas conexiones, vinculaciones y transferencias iniciadas hay, cuántos dispositivos distintos se conectan cada día y semana, y si son navegadores o nodos de línea de comandos y de qué tipo. No guardan códigos de dispositivo, nombres, direcciones IP ni nada de tus archivos; los dispositivos distintos se cuentan con un valor que se descarta al terminar el día o la semana, así que no se puede seguir a nadie de un día a otro.</p>
-      <h3>3. Qué se guarda en tu navegador</h3>
+      <h3>3. Estadísticas de uso</h3>
       <hr></hr>
-      <p>En el almacenamiento local (localStorage) se guardan una clave secreta que identifica a tu dispositivo, su código y nombre, la lista de dispositivos vinculados y tus preferencias de tema e idioma. Tu clipboard (los textos y archivos que añades, hasta 24 h) y la última lista vista del clipboard de cada dispositivo vinculado se guardan en el almacenamiento del navegador (IndexedDB); solo tus dispositivos vinculados pueden verlo, directamente y sin pasar por el servidor. Puedes borrarlo todo con «🧹 Borrar todo y empezar de cero», al final de la página principal, o eliminando los datos de este sitio desde tu navegador.</p>
-      <h3>4. Terceros</h3>
+      <p>Para saber cuánto se usa FileSwap y decidir cómo mejorarlo, el servidor lleva contadores anónimos: solo totales, nunca un registro por persona. Cuenta:</p>
+      <ul>
+        <li>cuántos dispositivos hay conectados, y cuántos dispositivos distintos se conectan cada día y cada semana;</li>
+        <li>cuántas conexiones, vinculaciones y transferencias iniciadas o canceladas hay, y cuántas veces se abre el clipboard de otro dispositivo;</li>
+        <li>si se conectan desde el navegador o desde el programa de línea de comandos, y el tipo de dispositivo elegido (móvil, portátil, servidor…);</li>
+        <li>cuántas conexiones rechaza el servidor por sus límites de seguridad.</li>
+      </ul>
+      <p>Estos totales no incluyen códigos de dispositivo, nombres, direcciones IP, ubicación ni nada sobre tus archivos (nombres, tamaños o contenido). Para contar dispositivos distintos sin saber cuáles son, se usa un valor que se descarta al terminar el día o la semana, así que no se puede seguir a nadie de un día a otro. Los totales se guardan hasta un año en un servidor propio y no se comparten con nadie.</p>
+      <h3>4. Qué se guarda en tu navegador</h3>
+      <hr></hr>
+      <p>En el almacenamiento local (localStorage) se guardan una clave secreta que identifica a tu dispositivo, su código y nombre, la lista de dispositivos vinculados y tus preferencias de tema e idioma. Tu clipboard (los textos y archivos que añades, hasta 24 h) y la última lista vista del clipboard de cada dispositivo vinculado se guardan en el almacenamiento del navegador (IndexedDB); solo tus dispositivos vinculados pueden verlo, directamente y sin pasar por el servidor. Puedes borrarlo todo, y desvincular este navegador de tus dispositivos, con «🧹 Desincronizar y reiniciar sesión», al final de la página principal, o eliminando los datos de este sitio desde tu navegador.</p>
+      <h3>5. Terceros</h3>
       <hr></hr>
       <ul>
         <li><strong>Google</strong> (servidores STUN): ayudan a establecer la conexión directa y ven tu IP pública.</li>
         <li><strong>El otro dispositivo</strong>: en una conexión directa, cada parte puede ver la dirección IP de la otra.</li>
         <li><strong>PayPal</strong>: solo si usas el enlace de donación; se rige por su propia política de privacidad.</li>
+        <li><strong>Google Forms</strong>: solo si envías feedback desde «Acerca de». El formulario no pide nombre ni correo, y se rige por la política de privacidad de Google.</li>
       </ul>
-      <h3>5. Lo que no hacemos</h3>
+      <h3>6. Lo que no hacemos</h3>
       <hr></hr>
-      <p>No vendemos ni compartimos datos, no usamos cookies, rastreadores ni analítica, y no creamos perfiles de uso.</p>
-      <h3>6. Tus derechos</h3>
+      <p>No vendemos ni compartimos datos, no usamos cookies, rastreadores ni servicios de analítica de terceros, y no creamos perfiles de uso: las estadísticas de la sección 3 son solo totales anónimos.</p>
+      <h3>7. Tus derechos</h3>
       <hr></hr>
       <p>Como no hay cuentas, no guardamos datos personales a tu nombre de forma persistente. Para dejar de usar FileSwap basta con desvincular tus dispositivos y borrar los datos del sitio. Si tienes preguntas, contacta: ${contact}</p>
-      <h3>7. Cambios</h3>
+      <h3>8. Cambios</h3>
       <hr></hr>
       <p>Cualquier cambio se publicará en esta página con una nueva fecha.</p>`,
   },
@@ -3111,7 +3121,7 @@ const LEGAL = {
       <hr></hr>
       <p>These terms may be updated; the date above shows the current version. Continuing to use FileSwap after a change means you accept it.</p>`,
     privacy: (contact) => `
-      <p class="summary">FileSwap has no accounts, uses no cookies or analytics, and the server never receives the contents of your files.</p>
+      <p class="summary">FileSwap has no accounts and uses no cookies or third-party analytics. The server never receives the contents of your files and only keeps anonymous usage totals.</p>
       <h3>1. Your files</h3>
       <hr></hr>
       <p>They travel directly from one browser to another over WebRTC, encrypted in transit (DTLS). They never go through the server and are never stored on it. On the receiving device they stay in the tab’s memory until you close or reload it, unless you download them.</p>
@@ -3125,24 +3135,34 @@ const LEGAL = {
         <li>the technical messages that open the direct connection (SDP/ICE), which contain network addresses.</li>
       </ul>
       <p>This information is deleted when you disconnect or when the server restarts; there is no database. The server’s technical error logs may include your IP address.</p>
-      <p>To know how much FileSwap is used, the server keeps aggregate, anonymous counters: how many connections, pairings and started transfers there are, how many distinct devices connect each day and week, and whether they are browsers or command-line nodes and of which kind. They keep no device codes, names, IP addresses or anything about your files; distinct devices are counted with a value that is thrown away when the day or week ends, so nobody can be followed from one day to the next.</p>
-      <h3>3. What is stored in your browser</h3>
+      <h3>3. Usage statistics</h3>
       <hr></hr>
-      <p>Local storage (localStorage) keeps a secret key that identifies your device, its code and name, the list of linked devices and your theme and language preferences. Your clipboard (the texts and files you add, for up to 24 h) and the last list seen of each linked device’s clipboard are kept in the browser’s storage (IndexedDB); only your linked devices can see it, directly and without going through the server. You can delete all of it with “🧹 Delete everything and start over” at the bottom of the main page, or by clearing this site’s data in your browser.</p>
-      <h3>4. Third parties</h3>
+      <p>To know how much FileSwap is used and decide how to improve it, the server keeps anonymous counters: totals only, never a record per person. It counts:</p>
+      <ul>
+        <li>how many devices are connected, and how many distinct devices connect each day and each week;</li>
+        <li>how many connections, pairings and started or cancelled transfers there are, and how often another device’s clipboard is opened;</li>
+        <li>whether they connect from the browser or from the command-line program, and the device kind chosen (phone, laptop, server…);</li>
+        <li>how many connections the server refuses because of its security limits.</li>
+      </ul>
+      <p>These totals include no device codes, names, IP addresses, location or anything about your files (names, sizes or contents). To count distinct devices without knowing which ones they are, a value is used that is thrown away when the day or week ends, so nobody can be followed from one day to the next. The totals are kept for up to a year on our own server and are not shared with anyone.</p>
+      <h3>4. What is stored in your browser</h3>
+      <hr></hr>
+      <p>Local storage (localStorage) keeps a secret key that identifies your device, its code and name, the list of linked devices and your theme and language preferences. Your clipboard (the texts and files you add, for up to 24 h) and the last list seen of each linked device’s clipboard are kept in the browser’s storage (IndexedDB); only your linked devices can see it, directly and without going through the server. You can delete all of it with “🧹 Desynchronize and restart session” at the bottom of the main page, or by clearing this site’s data in your browser.</p>
+      <h3>5. Third parties</h3>
       <hr></hr>
       <ul>
         <li><strong>Google</strong> (STUN servers): help set up the direct connection and see your public IP.</li>
         <li><strong>The other device</strong>: in a direct connection, each side can see the other’s IP address.</li>
         <li><strong>PayPal</strong>: only if you use the donation link; its own privacy policy applies.</li>
+        <li><strong>Google Forms</strong>: only if you send feedback from “About”. The form doesn’t ask for your name or email, and Google’s privacy policy applies.</li>
       </ul>
-      <h3>5. What we don’t do</h3>
+      <h3>6. What we don’t do</h3>
       <hr></hr>
-      <p>We don’t sell or share data, we don’t use cookies, trackers or analytics, and we don’t build usage profiles.</p>
-      <h3>6. Your rights</h3>
+      <p>We don’t sell or share data, we don’t use cookies, trackers or third-party analytics services, and we don’t build usage profiles: the statistics in section 3 are anonymous totals only.</p>
+      <h3>7. Your rights</h3>
       <hr></hr>
       <p>Since there are no accounts, we don’t persistently keep personal data under your name. To stop using FileSwap, just unlink your devices and clear the site’s data. If you have questions, contact: ${contact}</p>
-      <h3>7. Changes</h3>
+      <h3>8. Changes</h3>
       <hr></hr>
       <p>Any change will be published on this page with a new date.</p>`,
   },
@@ -3222,15 +3242,15 @@ const GUIDE = {
       <li><strong>Vincula tus dispositivos, una sola vez.</strong> Pulsa «Vincular nuevo dispositivo»: donde se desplegará el QR y un UUID, siendo los dos identificadores de tu dispositivo. En el otro dispositivo, escanea el QR o escribe el UUID, y acepta la solicitud en este para confirmar la vinculación, la cual permanecerá hasta que pulses 🗑.</li>
       <li><strong>Envía.</strong> Toca un dispositivo <em>en línea</em> (verde) y elige archivos o una carpeta; varios archivos viajan juntos en un ZIP creado aquí. El otro los ve en «Archivos recibidos». Los dos deben tener FileSwap abierto.</li>
       <li><strong>Clipboard.</strong> En «Mi clipboard» deja textos (enlaces, comandos, notas) o archivos durante 24 h. Con 📋 en un dispositivo vinculado ves su clipboard y copias o descargas lo que tenga.</li>
-      <li><strong>En un equipo que no es tuyo,</strong> al terminar usa «🧹 Borrar todo y empezar de cero», al final de la página.</li>
+      <li><strong>En un equipo que no es tuyo,</strong> al terminar usa «🧹 Desincronizar y reiniciar sesión», al final de la página.</li>
       <li><strong>En un servidor Linux,</strong> instala el programa de línea de comandos:<br><code>${CLI_INSTALL}</code><br>y sigue la <a href="${CLI_GUIDE_URL}" target="_blank" rel="noopener">guía de instalación</a>.</li>
     </ol>
     <h3>Dónde se guarda cada cosa</h3>
     <ul>
       <li><strong>Archivos recibidos:</strong> mientras llegan se escriben en un espacio privado del navegador para esta web, no en la memoria, así que pueden ser de varios GB. No van a tu carpeta de Descargas hasta que pulses ⬇, y se borran al recargar o cerrar la página: descárgalos antes.</li>
       <li><strong>En una ventana privada</strong> o un navegador sin ese espacio, se guardan en la memoria: hasta 1,5 GB (512 MB en el móvil). Los más grandes se rechazan antes de empezar, y quien envía lo ve.</li>
-      <li><strong>Tu código, tus vinculaciones y tu clipboard</strong> se guardan en este navegador. En una ventana privada se pierden al cerrarla; «🧹 Borrar todo» los elimina.</li>
-      <li><strong>Nada de esto se sube al servidor.</strong></li>
+      <li><strong>Tu código, tus vinculaciones y tu clipboard</strong> se guardan en este navegador. En una ventana privada se pierden al cerrarla; «🧹 Desincronizar y reiniciar sesión» los elimina.</li>
+      <li><strong>Nada de esto se sube al servidor.</strong> El servidor solo cuenta totales de uso anónimos, sin saber quién eres (ver Privacidad).</li>
     </ul>
     <p style="margin-top:12px">⚠️ Las transferencias van cifradas entre los dispositivos, pero todavía no hay cifrado de extremo a extremo propio: no lo uses para datos médicos, contraseñas ni claves.</p>`,
   en: () => `
@@ -3240,15 +3260,15 @@ const GUIDE = {
       <li><strong>Pair your devices, once.</strong> Tap “Link a new device”: where a QR code and a UUID will be displayed—both serving as identifiers for your current device. On the other device, scan the QR code or enter the UUID, then accept the request to confirm the pairing, which will remain in place until you press 🗑.</li>
       <li><strong>Send.</strong> Tap an <em>online</em> (green) device and choose files or a folder; several files travel together in a ZIP made here. The other device gets them under “Received files”. Both need FileSwap open.</li>
       <li><strong>Clipboard.</strong> In “My clipboard”, leave texts (links, commands, notes) or files for 24 h. With 📋 on a paired device you see its clipboard and copy or download what it has.</li>
-      <li><strong>On a computer that isn’t yours,</strong> when you are done use “🧹 Delete everything and start over” at the bottom of the page.</li>
+      <li><strong>On a computer that isn’t yours,</strong> when you are done use “🧹 Desynchronize and restart session” at the bottom of the page.</li>
       <li><strong>On a Linux server,</strong> install the command-line program:<br><code>${CLI_INSTALL}</code><br>and follow the <a href="${CLI_GUIDE_URL}" target="_blank" rel="noopener">install guide</a>.</li>
     </ol>
     <h3>Where things are kept</h3>
     <ul>
       <li><strong>Received files</strong> are written, as they arrive, to a private browser space for this site instead of memory, so they can be several GB. They don’t reach your Downloads folder until you press ⬇, and they are deleted when you reload or close the page: download them first.</li>
       <li><strong>In a private window,</strong> or a browser without that space, they are kept in memory: up to 1.5 GB (512 MB on phones). Bigger ones are refused before they start, and the sender is told.</li>
-      <li><strong>Your code, your pairings and your clipboard</strong> are kept in this browser. In a private window they are lost when you close it; “🧹 Delete everything” removes them.</li>
-      <li><strong>None of it is uploaded to the server.</strong></li>
+      <li><strong>Your code, your pairings and your clipboard</strong> are kept in this browser. In a private window they are lost when you close it; “🧹 Desynchronize and restart session” removes them.</li>
+      <li><strong>None of it is uploaded to the server.</strong> The server only counts anonymous usage totals, without knowing who you are (see Privacy).</li>
     </ul>
     <p style="margin-top:12px">⚠️ Transfers are encrypted between the devices, but there is no end-to-end encryption of our own yet: don’t use it for medical data, passwords or keys.</p>`,
 };
