@@ -342,11 +342,11 @@
     },
     {
       "type": "timeseries",
-      "title": "Devices online",
-      "description": "Devices connected at each moment, browsers vs CLI nodes.",
+      "title": "Devices online (peak)",
+      "description": "Most devices connected at once in each interval, browsers vs CLI nodes (checked every minute, so short visits still count).",
       "targets": [
         {
-          "expr": "sum by (client) (fileswap_devices_online)",
+          "expr": "max_over_time(sum by (client) (fileswap_devices_online)[$__interval:1m])",
           "legendFormat": "{{client}}",
           "refId": "A",
           "datasource": {
@@ -389,6 +389,8 @@
         },
         "overrides": []
       },
+      "interval": "1m",
+      "maxDataPoints": 200,
       "id": 7,
       "gridPos": {
         "x": 0,
@@ -404,10 +406,10 @@
     {
       "type": "timeseries",
       "title": "Distinct devices (resets at midnight)",
-      "description": "Different devices seen since midnight / since Monday (server time zone). Each peak, just before it drops, is that day's or week's total.",
+      "description": "Different devices seen since midnight / since Monday (server time zone), the highest value in each interval. Each peak, just before it drops, is that day's or week's total.",
       "targets": [
         {
-          "expr": "max(fileswap_devices_unique{period=\"day\"})",
+          "expr": "max_over_time(max(fileswap_devices_unique{period=\"day\"})[$__interval:5m])",
           "legendFormat": "today so far",
           "refId": "A",
           "datasource": {
@@ -416,7 +418,7 @@
           }
         },
         {
-          "expr": "max(fileswap_devices_unique{period=\"week\"})",
+          "expr": "max_over_time(max(fileswap_devices_unique{period=\"week\"})[$__interval:5m])",
           "legendFormat": "this week so far",
           "refId": "B",
           "datasource": {
@@ -459,6 +461,8 @@
         },
         "overrides": []
       },
+      "interval": "5m",
+      "maxDataPoints": 200,
       "id": 8,
       "gridPos": {
         "x": 12,
