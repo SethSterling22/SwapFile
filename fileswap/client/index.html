@@ -831,7 +831,7 @@
       <!-- Start over: wipe this browser's FileSwap data -->
       <div class="reset-zone">
         <div class="reset-text" data-i18n="reset.hint">¿Usaste un equipo que no es tuyo? Al terminar, borra todo lo de FileSwap en este navegador.</div>
-        <button class="btn btn-ghost btn-sm reset-btn" id="reset-btn" type="button" data-i18n="reset.button">🧹 Borrar todo y empezar de cero</button>
+        <button class="btn btn-ghost btn-sm reset-btn" id="reset-btn" type="button" data-i18n="reset.button">🧹 Desincronizar y reiniciar sesión </button>
       </div>
 
     </div>
@@ -1274,7 +1274,7 @@ const I18N = {
     'guide.dismiss':      'No volver a mostrar',
     'guide.how':          '¿Cómo funciona? Guía rápida',
     'reset.hint':         '¿Usaste un equipo que no es tuyo? Al terminar, borra todo lo de FileSwap en este navegador.',
-    'reset.button':       '🧹 Borrar todo y empezar de cero',
+    'reset.button':       '🧹 Desincronizar y reiniciar sesión ',
     'reset.title':        'Borrar todo en este navegador',
     'reset.body':         'FileSwap volverá a empezar desde cero aquí. Se borra:',
     'reset.item.identity':'El código y el nombre de este dispositivo',
@@ -1465,7 +1465,7 @@ const I18N = {
     'guide.dismiss':      'Don’t show again',
     'guide.how':          'How does it work? Quick guide',
     'reset.hint':         'Used a computer that isn’t yours? When you are done, delete everything FileSwap keeps in this browser.',
-    'reset.button':       '🧹 Delete everything and start over',
+    'reset.button':       '🧹 Desynchronize and restart session',
     'reset.title':        'Delete everything in this browser',
     'reset.body':         'FileSwap will start from scratch here. This deletes:',
     'reset.item.identity':'This device’s code and name',
@@ -3059,7 +3059,7 @@ const LEGAL = {
       <p>Para saber cuánto se usa FileSwap, el servidor lleva contadores agregados y anónimos: cuántas conexiones, vinculaciones y transferencias iniciadas hay, cuántos dispositivos distintos se conectan cada día y semana, y si son navegadores o nodos de línea de comandos y de qué tipo. No guardan códigos de dispositivo, nombres, direcciones IP ni nada de tus archivos; los dispositivos distintos se cuentan con un valor que se descarta al terminar el día o la semana, así que no se puede seguir a nadie de un día a otro.</p>
       <h3>3. Qué se guarda en tu navegador</h3>
       <hr></hr>
-      <p>En el almacenamiento local (localStorage) se guardan una clave secreta que identifica a tu dispositivo, su código y nombre, la lista de dispositivos vinculados y tus preferencias de tema e idioma. Tu clipboard (los textos y archivos que añades, hasta 24 h) y la última lista vista del clipboard de cada dispositivo vinculado se guardan en el almacenamiento del navegador (IndexedDB); solo tus dispositivos vinculados pueden verlo, directamente y sin pasar por el servidor. Puedes borrarlo todo con «🧹 Borrar todo y empezar de cero», al final de la página principal, o eliminando los datos de este sitio desde tu navegador.</p>
+      <p>En el almacenamiento local (localStorage) se guardan una clave secreta que identifica a tu dispositivo, su código y nombre, la lista de dispositivos vinculados y tus preferencias de tema e idioma. Tu clipboard (los textos y archivos que añades, hasta 24 h) y la última lista vista del clipboard de cada dispositivo vinculado se guardan en el almacenamiento del navegador (IndexedDB); solo tus dispositivos vinculados pueden verlo, directamente y sin pasar por el servidor. Puedes borrarlo todos los nodos con «🧹 Desincronizar y reiniciar sesión», al final de la página principal, o eliminando los datos de este sitio desde tu navegador.</p>
       <h3>4. Terceros</h3>
       <hr></hr>
       <ul>
@@ -3128,7 +3128,7 @@ const LEGAL = {
       <p>To know how much FileSwap is used, the server keeps aggregate, anonymous counters: how many connections, pairings and started transfers there are, how many distinct devices connect each day and week, and whether they are browsers or command-line nodes and of which kind. They keep no device codes, names, IP addresses or anything about your files; distinct devices are counted with a value that is thrown away when the day or week ends, so nobody can be followed from one day to the next.</p>
       <h3>3. What is stored in your browser</h3>
       <hr></hr>
-      <p>Local storage (localStorage) keeps a secret key that identifies your device, its code and name, the list of linked devices and your theme and language preferences. Your clipboard (the texts and files you add, for up to 24 h) and the last list seen of each linked device’s clipboard are kept in the browser’s storage (IndexedDB); only your linked devices can see it, directly and without going through the server. You can delete all of it with “🧹 Delete everything and start over” at the bottom of the main page, or by clearing this site’s data in your browser.</p>
+      <p>Local storage (localStorage) keeps a secret key that identifies your device, its code and name, the list of linked devices and your theme and language preferences. Your clipboard (the texts and files you add, for up to 24 h) and the last list seen of each linked device’s clipboard are kept in the browser’s storage (IndexedDB); only your linked devices can see it, directly and without going through the server. You can delete all of it with “🧹 Desynchronize and restart session” at the bottom of the main page, or by clearing this site’s data in your browser.</p>
       <h3>4. Third parties</h3>
       <hr></hr>
       <ul>
@@ -3222,7 +3222,7 @@ const GUIDE = {
       <li><strong>Vincula tus dispositivos, una sola vez.</strong> Pulsa «Vincular nuevo dispositivo»: donde se desplegará el QR y un UUID, siendo los dos identificadores de tu dispositivo. En el otro dispositivo, escanea el QR o escribe el UUID, y acepta la solicitud en este para confirmar la vinculación, la cual permanecerá hasta que pulses 🗑.</li>
       <li><strong>Envía.</strong> Toca un dispositivo <em>en línea</em> (verde) y elige archivos o una carpeta; varios archivos viajan juntos en un ZIP creado aquí. El otro los ve en «Archivos recibidos». Los dos deben tener FileSwap abierto.</li>
       <li><strong>Clipboard.</strong> En «Mi clipboard» deja textos (enlaces, comandos, notas) o archivos durante 24 h. Con 📋 en un dispositivo vinculado ves su clipboard y copias o descargas lo que tenga.</li>
-      <li><strong>En un equipo que no es tuyo,</strong> al terminar usa «🧹 Borrar todo y empezar de cero», al final de la página.</li>
+      <li><strong>En un equipo que no es tuyo,</strong> al terminar usa «🧹 Desincronizar y reiniciar sesión», al final de la página.</li>
       <li><strong>En un servidor Linux,</strong> instala el programa de línea de comandos:<br><code>${CLI_INSTALL}</code><br>y sigue la <a href="${CLI_GUIDE_URL}" target="_blank" rel="noopener">guía de instalación</a>.</li>
     </ol>
     <h3>Dónde se guarda cada cosa</h3>
@@ -3240,7 +3240,7 @@ const GUIDE = {
       <li><strong>Pair your devices, once.</strong> Tap “Link a new device”: where a QR code and a UUID will be displayed—both serving as identifiers for your current device. On the other device, scan the QR code or enter the UUID, then accept the request to confirm the pairing, which will remain in place until you press 🗑.</li>
       <li><strong>Send.</strong> Tap an <em>online</em> (green) device and choose files or a folder; several files travel together in a ZIP made here. The other device gets them under “Received files”. Both need FileSwap open.</li>
       <li><strong>Clipboard.</strong> In “My clipboard”, leave texts (links, commands, notes) or files for 24 h. With 📋 on a paired device you see its clipboard and copy or download what it has.</li>
-      <li><strong>On a computer that isn’t yours,</strong> when you are done use “🧹 Delete everything and start over” at the bottom of the page.</li>
+      <li><strong>On a computer that isn’t yours,</strong> when you are done use “🧹 Desynchronize and restart session” at the bottom of the page.</li>
       <li><strong>On a Linux server,</strong> install the command-line program:<br><code>${CLI_INSTALL}</code><br>and follow the <a href="${CLI_GUIDE_URL}" target="_blank" rel="noopener">install guide</a>.</li>
     </ol>
     <h3>Where things are kept</h3>
