@@ -30,9 +30,9 @@ const secret = () => crypto.randomBytes(32).toString('hex');
 const wait = ms => new Promise(r => setTimeout(r, ms));
 
 // Connects, registers and resolves once the server confirms with `registered`
-function device(port, { secret: s = secret(), name = 'dev', pairedIds = [], kind } = {}) {
+function device(port, { secret: s = secret(), name = 'dev', pairedIds = [], kind, headers } = {}) {
   return new Promise((resolve, reject) => {
-    const ws = new WebSocket(`ws://localhost:${port}/ws`);
+    const ws = new WebSocket(`ws://localhost:${port}/ws`, { headers });
     ws.msgs = [];
     ws.secret = s;
     ws.on('message', m => {
@@ -249,6 +249,86 @@ test('the page has security headers, a CSP that allows its own inline scripts, a
   const a = await device(srv.port);
   assert.ok(got(a, m => m.type === 'registered' && m.app === health.version));
   a.close();
+});
+
+// ─── Metrics ────────────────────────────────────────────────────────────────
+
+const scrape = async (port, headers) => {
+  const res = await fetch(`http://localhost:${port}/metrics`, { headers });
+  return { status: res.status, text: await res.text() };
+};
+const sample = (text, series) => {
+  const line = text.split('\n').find(l => l.startsWith(series + ' '));
+  return line ? Number(line.slice(series.length + 1)) : undefined;
+};
+
+test('metrics count usage on their own port, without device codes, names or IPs', async () => {
+  const mport = 40000 + Math.floor(Math.random() * 10000);
+  const s = await startServer({ METRICS_PORT: String(mport) });
+  try {
+    const origin = { Origin: `http://localhost:${s.port}` };
+    const a = await device(s.port, { name: 'Laptop de Ana', kind: 'laptop', headers: origin });
+    const b0 = await device(s.port, { name: 'office-server', kind: 'server' });
+    const b = await device(s.port, { secret: b0.secret, name: 'office-server', kind: 'server' }); // reconnect: same device
+    await pair(a, b);
+    a.json({ type: 'signal', to: b.id, data: { type: 'offer', sdp: 'x', tid: 't1' } });
+    a.json({ type: 'signal', to: b.id, data: { type: 'candidate', tid: 't1' } });
+    b.json({ type: 'signal', to: a.id, data: { type: 'offer', sdp: 'x', tid: 't2', kind: 'clip' } });
+    a.json({ type: 'signal', to: b.id, data: { type: 'abort', tid: 't1' } });
+    await tryConnect(s.port, { Origin: 'https://evil.example' });
+    await wait(100);
+
+    const { status, text } = await scrape(mport);
+    assert.equal(status, 200);
+    assert.equal(sample(text, 'fileswap_ws_connections_total{client="browser"}'), 1);
+    assert.equal(sample(text, 'fileswap_ws_connections_total{client="cli"}'), 2);
+    assert.equal(sample(text, 'fileswap_registrations_total{client="cli",kind="server"}'), 2);
+    assert.equal(sample(text, 'fileswap_devices_online{client="browser",kind="laptop"}'), 1);
+    assert.equal(sample(text, 'fileswap_devices_online{client="cli",kind="server"}'), 1);
+    assert.equal(sample(text, 'fileswap_devices_unique{period="day"}'), 2, 'a reconnect is the same device');
+    assert.equal(sample(text, 'fileswap_pairings_total{event="requested"}'), 1);
+    assert.equal(sample(text, 'fileswap_pairings_total{event="accepted"}'), 1);
+    assert.equal(sample(text, 'fileswap_transfers_started_total{type="file"}'), 1);
+    assert.equal(sample(text, 'fileswap_transfers_started_total{type="clip_list"}'), 1);
+    assert.equal(sample(text, 'fileswap_transfers_aborted_total'), 1);
+    assert.equal(sample(text, 'fileswap_ws_rejected_total{reason="origin"}'), 1);
+    assert.equal(sample(text, 'fileswap_pairings_total{event="unpaired"}'), 0, 'known series start at 0');
+
+    // Nothing that identifies a user
+    assert.doesNotMatch(text, /[0-9a-f]{8}-[0-9a-f]{4}-/, 'no device codes');
+    assert.doesNotMatch(text, /\d+\.\d+\.\d+\.\d+|::1/, 'no IP addresses');
+    assert.doesNotMatch(text, /Ana|office-server/, 'no device names');
+
+    // And not on the public port
+    const pub = await fetch(`http://localhost:${s.port}/metrics`);
+    assert.doesNotMatch(await pub.text(), /# TYPE fileswap_/);
+    a.close(); b.close();
+  } finally {
+    s.proc.kill();
+  }
+});
+
+test('METRICS_TOKEN protects the metrics endpoint', async () => {
+  const mport = 40000 + Math.floor(Math.random() * 10000);
+  const s = await startServer({ METRICS_PORT: String(mport), METRICS_TOKEN: 's3cret' });
+  try {
+    assert.equal((await scrape(mport)).status, 401);
+    assert.equal((await scrape(mport, { Authorization: 'Bearer nope' })).status, 401);
+    assert.equal((await scrape(mport, { Authorization: 'Bearer s3cret' })).status, 200);
+  } finally {
+    s.proc.kill();
+  }
+});
+
+test('distinct devices are forgotten when the day ends', () => {
+  const { PeriodUniques } = require('../metrics');
+  const u = new PeriodUniques(d => d.toDateString());
+  const day1 = new Date(2026, 10, 27, 23, 59), day2 = new Date(2026, 10, 28, 0, 1);
+  u.add('a', day1); u.add('b', day1); u.add('a', day1);
+  assert.equal(u.count(day1), 2);
+  assert.equal(u.count(day2), 0);
+  u.add('a', day2);
+  assert.equal(u.count(day2), 1);
 });
 
 // ─── Search engines and link previews ───────────────────────────────────────

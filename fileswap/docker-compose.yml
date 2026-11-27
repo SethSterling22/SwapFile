@@ -6,6 +6,9 @@ services:
     ports:
       # Host port (override with FILESWAP_PORT=xxxx); the container always listens on 3000
       - "${FILESWAP_PORT:-7341}:3000"
+      # Prometheus metrics. Only for your LAN / Tailscale: never forward it in the
+      # router or proxy it through Caddy (FILESWAP_METRICS_PORT overrides the host port)
+      - "${FILESWAP_METRICS_PORT:-9465}:9465"
     environment:
       PORT: 3000
       SESSION_TTL_MS: 1800000
@@ -18,6 +21,11 @@ services:
       MAX_CONN_PER_IP: 20
       # Public address: sitemap, canonical URL and link-preview image for search engines
       PUBLIC_URL: https://www.fileswap.zip
+      # Anonymous usage counters for Prometheus (see README → Metrics); empty turns them off
+      METRICS_PORT: 9465
+      # METRICS_TOKEN: change-me   # optional: Prometheus must send it as a bearer token
+      # Days for "distinct devices per day" start at midnight in this time zone
+      TZ: UTC
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:3000/health"]
