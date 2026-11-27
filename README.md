@@ -117,9 +117,11 @@ fileswap/
 │                           # No build step, no framework dependencies
 ├── server/
 │   ├── index.js            # Signaling server (Node.js + ws + express-like HTTP)
+│   ├── metrics.js          # Anonymous usage counters for Prometheus (own port)
 │   ├── package.json
 │   ├── .env.example
 │   └── Dockerfile
+├── monitoring/             # Grafana dashboard + Prometheus setup for the metrics
 ├── docker-compose.yml
 └── README.md
 ```
@@ -145,6 +147,7 @@ fileswap/
 | Pairing | Relays `pair-request` / `pair-accept` / `pair-reject` between devices |
 | Signal relay | Forwards SDP and ICE messages only between mutually paired devices |
 | Security | Max message size 16 KB · Rate limit 120 msg/min per socket · Max 50 000 sessions · Handler errors never crash the process |
+| Metrics | Optional anonymous counters (devices online / distinct per day, connections, pairings, started transfers, refusals) on a separate port — see [monitoring](fileswap/monitoring/README.md) |
 
 ---
 
@@ -271,6 +274,9 @@ Copy `server/.env.example` → `server/.env`.
 | `ALLOWED_ORIGINS` | *(empty)* | Extra comma-separated origins whose pages may open the WebSocket. The server's own host is always allowed, and so are clients without an `Origin` (the CLI); any other website is refused with `403` |
 | `TRUST_PROXY` | *(off)* | Set to `1` behind Caddy/nginx: the client IP is taken from the last `X-Forwarded-For` hop, and HSTS is sent on HTTPS. Leave it off if the port is reachable directly, or anyone could fake their IP |
 | `MAX_CONN_PER_IP` | `20` | Max simultaneous WebSocket connections from one IP (`429` beyond it) |
+| `METRICS_PORT` | *(off)* | Port for anonymous Prometheus metrics at `/metrics`, on its own listener. Keep it private (LAN/VPN), never behind the public proxy. See [monitoring](fileswap/monitoring/README.md) |
+| `METRICS_TOKEN` | *(empty)* | Optional bearer token required on `/metrics` |
+| `TZ` | system | Time zone for when "today" and "this week" start in the distinct-device counts |
 
 Every page is served with a Content-Security-Policy (inline scripts allowed only by their SHA-256), `X-Frame-Options: DENY`, `nosniff`, `Referrer-Policy: no-referrer` and `Permissions-Policy`. No third-party script is loaded: the QR library is self-hosted in [`client/vendor/`](fileswap/client/vendor/README.md) with Subresource Integrity.
 
@@ -285,6 +291,7 @@ Every page is served with a Content-Security-Policy (inline scripts allowed only
 | QR link interception | The attacker needs the target device to be online and accept the pairing request. |
 | Impersonation / session hijack | Each device keeps a random 256-bit `deviceSecret` in `localStorage`; the public `deviceId` (shown in the QR) is `SHA-256(secret)`. Knowing a `deviceId` is not enough to register as it. A newer connection with the same secret replaces the old one (close code `4001`). |
 | Abuse of a public server | Other websites cannot open the WebSocket (Origin check), connections per IP and messages per device are limited, and the page can't be framed (clickjacking). |
+| Usage statistics | Only aggregate counters with fixed labels: no device codes, names, IPs or file data. Distinct devices per day/week are counted with a salt thrown away when the period ends. A test fails if a device code, name or IP shows up in `/metrics`. |
 | Server-side data leakage | No database, no logs of content or file metadata. Server only knows device names and pairing relationships. |
 
 > **Note:** In-transit encryption is provided by WebRTC's mandatory DTLS layer. End-to-end application-layer encryption (ECDH + AES-GCM via Web Crypto API) is planned for v1.1.

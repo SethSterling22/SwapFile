@@ -1103,7 +1103,7 @@ const ABOUT = {
   // Empty shows the button disabled.
   feedback: 'https://docs.google.com/forms/d/e/1FAIpQLSdxRyZ5igex7s950VevOtUG5gfJUaDNRLJnRBr1_39QK6bKPw/viewform',  // e.g. 'https://www.paypal.com/paypalme/TU_USUARIO' — the QR is generated from this link
 };
-const LEGAL_UPDATED = { es: '24 de noviembre de 2026', en: 'November 24, 2026' };
+const LEGAL_UPDATED = { es: '27 de noviembre de 2026', en: 'November 27, 2026' };
 const STORAGE_KEY        = 'fileswap_v1';
 const LEGACY_STORAGE_KEY = 'droplink_v1'; // app was called DropLink before
 const THEME_KEY          = 'fileswap_theme';
@@ -3044,6 +3044,7 @@ const LEGAL = {
         <li>los mensajes técnicos que abren la conexión directa (SDP/ICE), que contienen direcciones de red.</li>
       </ul>
       <p>Esta información se borra al desconectarte o cuando se reinicia el servidor; no hay base de datos. Los registros técnicos de errores del servidor pueden incluir tu dirección IP.</p>
+      <p>Para saber cuánto se usa FileSwap, el servidor lleva contadores agregados y anónimos: cuántas conexiones, vinculaciones y transferencias iniciadas hay, cuántos dispositivos distintos se conectan cada día y semana, y si son navegadores o nodos de línea de comandos y de qué tipo. No guardan códigos de dispositivo, nombres, direcciones IP ni nada de tus archivos; los dispositivos distintos se cuentan con un valor que se descarta al terminar el día o la semana, así que no se puede seguir a nadie de un día a otro.</p>
       <h3>3. Qué se guarda en tu navegador</h3>
       <hr></hr>
       <p>En el almacenamiento local (localStorage) se guardan una clave secreta que identifica a tu dispositivo, su código y nombre, la lista de dispositivos vinculados y tus preferencias de tema e idioma. Tu clipboard (los textos y archivos que añades, hasta 24 h) y la última lista vista del clipboard de cada dispositivo vinculado se guardan en el almacenamiento del navegador (IndexedDB); solo tus dispositivos vinculados pueden verlo, directamente y sin pasar por el servidor. Puedes borrarlo todo con «🧹 Borrar todo y empezar de cero», al final de la página principal, o eliminando los datos de este sitio desde tu navegador.</p>
@@ -3112,6 +3113,7 @@ const LEGAL = {
         <li>the technical messages that open the direct connection (SDP/ICE), which contain network addresses.</li>
       </ul>
       <p>This information is deleted when you disconnect or when the server restarts; there is no database. The server’s technical error logs may include your IP address.</p>
+      <p>To know how much FileSwap is used, the server keeps aggregate, anonymous counters: how many connections, pairings and started transfers there are, how many distinct devices connect each day and week, and whether they are browsers or command-line nodes and of which kind. They keep no device codes, names, IP addresses or anything about your files; distinct devices are counted with a value that is thrown away when the day or week ends, so nobody can be followed from one day to the next.</p>
       <h3>3. What is stored in your browser</h3>
       <hr></hr>
       <p>Local storage (localStorage) keeps a secret key that identifies your device, its code and name, the list of linked devices and your theme and language preferences. Your clipboard (the texts and files you add, for up to 24 h) and the last list seen of each linked device’s clipboard are kept in the browser’s storage (IndexedDB); only your linked devices can see it, directly and without going through the server. You can delete all of it with “🧹 Delete everything and start over” at the bottom of the main page, or by clearing this site’s data in your browser.</p>

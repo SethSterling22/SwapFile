@@ -18,6 +18,7 @@ const path    = require('path');
 const fs      = require('fs');
 const crypto  = require('crypto');
 const { WebSocketServer } = require('ws');
+const metrics = require('./metrics');
 
 // ─── Config ────────────────────────────────────────────────────────────────
 const PORT            = parseInt(process.env.PORT            ?? '3000',  10);
@@ -35,6 +36,10 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS ?? '').split(',').map(s => 
 // proxy really sits in front, or clients could fake their IP.
 const TRUST_PROXY     = ['1', 'true', 'yes'].includes(String(process.env.TRUST_PROXY ?? '').toLowerCase());
 const MAX_CONN_PER_IP = parseInt(process.env.MAX_CONN_PER_IP ?? '20', 10);
+// Anonymous usage counters for Prometheus, on their own port (off when empty).
+// Never publish it through the reverse proxy; METRICS_TOKEN adds a bearer token.
+const METRICS_PORT    = parseInt(process.env.METRICS_PORT ?? '', 10);
+const METRICS_TOKEN   = process.env.METRICS_TOKEN ?? '';
 
 const MAX_PENDING     = 20; // max unanswered pair-requests queued per device
 
@@ -44,7 +49,8 @@ const CLOSE_EXPIRED   = 4002; // no messages for SESSION_TTL_MS
 
 // ─── In-memory device registry ─────────────────────────────────────────────
 // Map<deviceId, DeviceEntry>
-// DeviceEntry = { ws, name, pairedIds: Set<string>, pendingFrom: Set<string>, _ttl }
+// DeviceEntry = { ws, name, kind, client, pairedIds: Set<string>, pendingFrom: Set<string>, _ttl }
+//   client      — 'browser' or 'cli' (browsers send an Origin header), for the metrics
 //   pairedIds   — devices this device has consented to (from its own localStorage
 //                 or a completed handshake). A link is only valid if it is mutual.
 //   pendingFrom — devices that sent a pair-request we have not answered yet
@@ -210,8 +216,8 @@ const wss = new WebSocketServer({
   path: '/ws',
   maxPayload: MAX_MSG_BYTES,
   verifyClient: ({ req }, done) => {
-    if (!originAllowed(req)) return done(false, 403, 'Origin not allowed');
-    if ((connsPerIp.get(clientIp(req)) ?? 0) >= MAX_CONN_PER_IP) return done(false, 429, 'Too many connections');
+    if (!originAllowed(req)) { metrics.rejected('origin'); return done(false, 403, 'Origin not allowed'); }
+    if ((connsPerIp.get(clientIp(req)) ?? 0) >= MAX_CONN_PER_IP) { metrics.rejected('ip_limit'); return done(false, 429, 'Too many connections'); }
     done(true);
   },
 });
@@ -221,7 +227,9 @@ wss.on('connection', (ws, req) => {
   let msgCount = 0;
   let resetAt  = Date.now() + 60_000;
   const ip = clientIp(req);
+  const client = req.headers.origin ? 'browser' : 'cli';
   connsPerIp.set(ip, (connsPerIp.get(ip) ?? 0) + 1);
+  metrics.connection(client);
 
   // ── Helpers ──────────────────────────────────────────────────────────────
   function sendSelf(payload)  { send(ws, payload); }
@@ -253,6 +261,7 @@ wss.on('connection', (ws, req) => {
   ws.on('message', (raw) => {
     // Size guard (ws maxPayload already handles binary, but double-check string)
     if (raw.length > MAX_MSG_BYTES) {
+      metrics.rejected('too_big');
       sendSelf({ type: 'error', code: 'MSG_TOO_LARGE', message: 'Message exceeds size limit' });
       return;
     }
@@ -267,6 +276,7 @@ wss.on('connection', (ws, req) => {
     }
 
     if (!rateOk()) {
+      metrics.rejected('rate_limit');
       sendSelf({ type: 'error', code: 'RATE_LIMITED', message: 'Too many messages' });
       return;
     }
@@ -310,6 +320,7 @@ wss.on('connection', (ws, req) => {
           oldWs.close(CLOSE_REPLACED, 'Replaced by a newer connection');
         } else if (!entry) {
           if (devices.size >= MAX_SESSIONS) {
+            metrics.rejected('capacity');
             sendSelf({ type: 'error', code: 'CAPACITY', message: 'Server at capacity' });
             ws.close(); return;
           }
@@ -317,15 +328,19 @@ wss.on('connection', (ws, req) => {
             ws,
             name: 'Dispositivo',
             kind: '',
+            client,
             pairedIds: new Set(),
             pendingFrom: new Set(),
           };
           devices.set(id, entry);
         }
+        const firstRegister = !deviceId; // register is sent again when the name changes
         deviceId = id;
 
         if (msg.name) entry.name = String(msg.name).slice(0, 60);
         if (KINDS.has(msg.kind)) entry.kind = msg.kind;
+        entry.client = client;
+        if (firstRegister) metrics.registered(id, client, entry.kind);
 
         // The client's localStorage is the source of truth for its own consent
         if (Array.isArray(msg.pairedIds)) {
@@ -360,6 +375,7 @@ wss.on('connection', (ws, req) => {
           return;
         }
         target.pendingFrom.add(deviceId);
+        metrics.pairing('requested');
         send(target.ws, { type: 'pair-request', from: { id: deviceId, name: me.name, kind: me.kind } });
         break;
       }
@@ -378,6 +394,7 @@ wss.on('connection', (ws, req) => {
         // Record pairing on server side
         me.pairedIds.add(msg.to);
         target.pairedIds.add(deviceId);
+        metrics.pairing('accepted');
 
         send(target.ws, { type: 'pair-accepted', from: { id: deviceId, name: me.name, kind: me.kind } });
         // Mutual presence notification
@@ -390,6 +407,7 @@ wss.on('connection', (ws, req) => {
       case 'pair-reject': {
         if (!me) return;
         if (!me.pendingFrom.delete(msg.to)) return;
+        metrics.pairing('rejected');
         const target = devices.get(msg.to);
         if (target) send(target.ws, { type: 'pair-rejected', from: { id: deviceId } });
         break;
@@ -398,7 +416,7 @@ wss.on('connection', (ws, req) => {
       // ── unpair ────────────────────────────────────────────────────────────
       case 'unpair': {
         if (!me) return;
-        me.pairedIds.delete(msg.with);
+        if (me.pairedIds.delete(msg.with)) metrics.pairing('unpaired');
         const peer = devices.get(msg.with);
         if (peer) {
           peer.pairedIds.delete(deviceId);
@@ -426,6 +444,7 @@ wss.on('connection', (ws, req) => {
           return;
         }
 
+        metrics.signal(msg.data);
         send(devices.get(msg.to).ws, { type: 'signal', from: deviceId, data: msg.data });
         break;
       }
@@ -447,7 +466,10 @@ wss.on('connection', (ws, req) => {
     if (n > 0) connsPerIp.set(ip, n); else connsPerIp.delete(ip);
     if (self()) cleanup(deviceId);
   });
-  ws.on('error', (err) => { console.error(`[ws] ${ip} error:`, err.message); });
+  ws.on('error', (err) => {
+    if (err.code === 'WS_ERR_UNSUPPORTED_MESSAGE_LENGTH') metrics.rejected('too_big');
+    console.error(`[ws] ${ip} error:`, err.message);
+  });
 });
 
 function send(targetWs, payload) {
@@ -468,10 +490,18 @@ function cleanup(id) {
 }
 
 // ─── Start ─────────────────────────────────────────────────────────────────
+metrics.setup({
+  devices: function* () { for (const d of devices.values()) yield { client: d.client, kind: d.kind || 'unknown' }; },
+  appVersion,
+});
+const metricsServer = Number.isInteger(METRICS_PORT) && METRICS_PORT > 0 ? metrics.listen(METRICS_PORT, METRICS_TOKEN) : null;
+
 server.listen(PORT, () => {
   console.log(`\n✅  FileSwap server listening on http://localhost:${PORT}`);
   console.log(`   WebSocket endpoint: ws://localhost:${PORT}/ws`);
-  console.log(`   Health check:       http://localhost:${PORT}/health\n`);
+  console.log(`   Health check:       http://localhost:${PORT}/health`);
+  if (metricsServer) console.log(`   Metrics:            http://localhost:${METRICS_PORT}/metrics (not on the public port)`);
+  console.log('');
 });
 
 process.on('SIGTERM', () => { server.close(); process.exit(0); });
