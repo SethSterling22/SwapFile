@@ -330,3 +330,49 @@ test('distinct devices are forgotten when the day ends', () => {
   u.add('a', day2);
   assert.equal(u.count(day2), 1);
 });
+
+// ─── Search engines and link previews ───────────────────────────────────────
+
+test('without PUBLIC_URL: robots.txt allows the app, no sitemap, and unknown paths are a real 404', async () => {
+  const robots = await fetch(`http://localhost:${srv.port}/robots.txt`);
+  assert.equal(robots.status, 200);
+  assert.match(robots.headers.get('content-type'), /text\/plain/);
+  const text = await robots.text();
+  assert.match(text, /^User-agent: \*\nAllow: \/\n/);
+  assert.doesNotMatch(text, /Sitemap:/);
+  assert.equal((await fetch(`http://localhost:${srv.port}/sitemap.xml`)).status, 404);
+  const missing = await fetch(`http://localhost:${srv.port}/no-such-page`);
+  assert.equal(missing.status, 404);
+  assert.match(await missing.text(), /noindex/);
+  const html = await (await fetch(`http://localhost:${srv.port}/?pair=x`)).text();
+  assert.match(html, /<meta name="description"/);
+  assert.doesNotMatch(html, /rel="canonical"|__FILESWAP_SEO__/);
+});
+
+test('with PUBLIC_URL: sitemap, canonical URL, preview image and structured data', async () => {
+  const s = await startServer({ PUBLIC_URL: 'https://www.example.org/' });
+  try {
+    const base = `http://localhost:${s.port}`;
+    assert.match(await (await fetch(`${base}/robots.txt`)).text(), /Sitemap: https:\/\/www\.example\.org\/sitemap\.xml/);
+    const sitemap = await fetch(`${base}/sitemap.xml`);
+    assert.match(sitemap.headers.get('content-type'), /application\/xml/);
+    assert.match(await sitemap.text(), /<loc>https:\/\/www\.example\.org\/<\/loc><lastmod>\d{4}-\d\d-\d\d<\/lastmod>/);
+    const res = await fetch(`${base}/`);
+    const html = await res.text();
+    assert.match(html, /<link rel="canonical" href="https:\/\/www\.example\.org\/" \/>/);
+    assert.match(html, /<meta property="og:image" content="https:\/\/www\.example\.org\/og-image\.png" \/>/);
+    const ld = JSON.parse(html.match(/<script type="application\/ld\+json">(.*?)<\/script>/)[1]);
+    assert.equal(ld['@type'], 'WebApplication');
+    assert.equal(ld.url, 'https://www.example.org/');
+    // The structured data is not a script the CSP has to allow, and the app scripts still are
+    const csp = res.headers.get('content-security-policy');
+    for (const [, body] of html.matchAll(/<script>([\s\S]*?)<\/script>/g)) {
+      assert.ok(csp.includes(`'sha256-${crypto.createHash('sha256').update(body, 'utf8').digest('base64')}'`));
+    }
+    const img = await fetch(`${base}/og-image.png`);
+    assert.equal(img.status, 200);
+    assert.equal(img.headers.get('content-type'), 'image/png');
+  } finally {
+    s.proc.kill();
+  }
+});

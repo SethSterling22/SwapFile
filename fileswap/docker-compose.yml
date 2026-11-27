@@ -19,6 +19,8 @@ services:
       # Set to 0 if this port is reachable from the internet directly, without a proxy.
       TRUST_PROXY: 1
       MAX_CONN_PER_IP: 20
+      # Public address: sitemap, canonical URL and link-preview image for search engines
+      PUBLIC_URL: https://www.fileswap.zip
       # Anonymous usage counters for Prometheus (see README → Metrics); empty turns them off
       METRICS_PORT: 9465
       # METRICS_TOKEN: change-me   # optional: Prometheus must send it as a bearer token

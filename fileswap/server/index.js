@@ -36,6 +36,11 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS ?? '').split(',').map(s => 
 // proxy really sits in front, or clients could fake their IP.
 const TRUST_PROXY     = ['1', 'true', 'yes'].includes(String(process.env.TRUST_PROXY ?? '').toLowerCase());
 const MAX_CONN_PER_IP = parseInt(process.env.MAX_CONN_PER_IP ?? '20', 10);
+// Public address of the web app, e.g. https://www.fileswap.zip. Enables the
+// sitemap and the absolute links search engines and link previews need
+// (canonical URL, preview image); empty keeps the server address-agnostic.
+const PUBLIC_URL      = /^https?:\/\/[^\s/]+$/i.test((process.env.PUBLIC_URL ?? '').replace(/\/+$/, ''))
+  ? process.env.PUBLIC_URL.replace(/\/+$/, '') : '';
 // Anonymous usage counters for Prometheus, on their own port (off when empty).
 // Never publish it through the reverse proxy; METRICS_TOKEN adds a bearer token.
 const METRICS_PORT    = parseInt(process.env.METRICS_PORT ?? '', 10);
@@ -96,7 +101,41 @@ const MIME = {
   '.png':  'image/png',
   '.svg':  'image/svg+xml',
   '.json': 'application/json',
+  '.txt':  'text/plain; charset=utf-8',
+  '.xml':  'application/xml; charset=utf-8',
 };
+
+const escapeHtml = (s) => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+// Tags that need the app's absolute address, put where index.html has the
+// __FILESWAP_SEO__ placeholder
+function seoTags() {
+  if (!PUBLIC_URL) return '';
+  const url = escapeHtml(PUBLIC_URL + '/');
+  const image = escapeHtml(PUBLIC_URL + '/og-image.png');
+  const ld = JSON.stringify({
+    '@context': 'https://schema.org',
+    '@type': 'WebApplication',
+    name: 'FileSwap',
+    url: PUBLIC_URL + '/',
+    image: PUBLIC_URL + '/og-image.png',
+    description: 'Pasa archivos y textos entre tus dispositivos, directo y sin cuenta: peer to peer en el navegador o con un CLI para servidores Linux.',
+    applicationCategory: 'UtilitiesApplication',
+    operatingSystem: 'Any (web browser), Linux (CLI)',
+    inLanguage: ['es', 'en'],
+    isAccessibleForFree: true,
+    offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
+  }).replace(/</g, '\\u003c');
+  return [
+    `<link rel="canonical" href="${url}" />`,
+    `<meta property="og:url" content="${url}" />`,
+    `<meta property="og:image" content="${image}" />`,
+    '<meta property="og:image:width" content="1200" />',
+    '<meta property="og:image:height" content="630" />',
+    `<meta name="twitter:image" content="${image}" />`,
+    `<script type="application/ld+json">${ld}</script>`,
+  ].join('\n  ');
+}
 
 // index.html is read again when it changes on disk. Its hash is the app
 // version: injected into the page and sent on register, so open tabs can tell
@@ -108,11 +147,11 @@ function loadIndex() {
   if (mtimeMs !== indexCache.mtimeMs) {
     const raw = fs.readFileSync(file, 'utf8');
     const version = crypto.createHash('sha256').update(raw).digest('hex').slice(0, 12);
-    const html = raw.replace('__FILESWAP_VERSION__', version);
+    const html = raw.replace('__FILESWAP_VERSION__', version).replace('<!-- __FILESWAP_SEO__ -->', seoTags());
     // The page's inline scripts are allowed by hash, so no 'unsafe-inline' for scripts
     const scriptHashes = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)]
       .map(m => `'sha256-${crypto.createHash('sha256').update(m[1], 'utf8').digest('base64')}'`);
-    indexCache = { mtimeMs, html, version, scriptHashes };
+    indexCache = { mtimeMs, html, version, scriptHashes, updated: new Date(mtimeMs).toISOString().slice(0, 10) };
   }
   return indexCache;
 }
@@ -139,6 +178,32 @@ function setSecurityHeaders(req, res) {
   if (TRUST_PROXY && req.headers['x-forwarded-proto'] === 'https') {
     res.setHeader('Strict-Transport-Security', 'max-age=31536000');
   }
+}
+
+function robotsTxt() {
+  const lines = ['User-agent: *', 'Allow: /', 'Disallow: /ws', 'Disallow: /health'];
+  if (PUBLIC_URL) lines.push('', `Sitemap: ${PUBLIC_URL}/sitemap.xml`);
+  return lines.join('\n') + '\n';
+}
+
+function sitemapXml() {
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>${escapeHtml(PUBLIC_URL + '/')}</loc><lastmod>${loadIndex().updated}</lastmod></url>
+</urlset>
+`;
+}
+
+const NOT_FOUND_PAGE = `<!DOCTYPE html>
+<html lang="es"><head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="robots" content="noindex" /><title>404 — FileSwap</title>
+<style>body{font-family:Georgia,serif;background:#eee7d3;color:#2b2418;display:grid;place-items:center;min-height:100vh;margin:0;text-align:center}a{color:#b53b2c}</style>
+</head><body><main><h1>404</h1><p>Esta página no existe · This page does not exist</p><p><a href="/">FileSwap →</a></p></main></body></html>
+`;
+
+function sendText(res, status, type, body) {
+  res.writeHead(status, { 'Content-Type': type, 'Cache-Control': 'public, max-age=3600' });
+  res.end(body);
 }
 
 function sendIndex(req, res) {
@@ -182,6 +247,12 @@ const server = http.createServer((req, res) => {
   // Static file serving
   const urlPath = req.url.split('?')[0];
   if (urlPath === '/' || urlPath === '/index.html') { sendIndex(req, res); return; }
+  if (urlPath === '/robots.txt') { sendText(res, 200, MIME['.txt'], robotsTxt()); return; }
+  if (urlPath === '/sitemap.xml') {
+    if (PUBLIC_URL) sendText(res, 200, MIME['.xml'], sitemapXml());
+    else { res.writeHead(404); res.end(); }
+    return;
+  }
   const filePath = path.join(CLIENT_DIR, urlPath);
 
   // Prevent directory traversal
@@ -190,8 +261,9 @@ const server = http.createServer((req, res) => {
   }
 
   fs.readFile(filePath, (err, data) => {
-    // SPA fallback — serve index.html for unknown routes (handles ?pair= links)
-    if (err) { sendIndex(req, res); return; }
+    // The app lives at / (pairing links are /?pair=…); anything else is a real
+    // 404, so search engines don't index copies of the page
+    if (err) { sendText(res, 404, MIME['.html'], NOT_FOUND_PAGE); return; }
     const ext = path.extname(filePath);
     res.writeHead(200, { 'Content-Type': MIME[ext] ?? 'application/octet-stream' });
     res.end(data);
