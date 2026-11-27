@@ -7,7 +7,19 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <!-- Replaced by the server with a hash of this file: tells open tabs a newer version is out -->
   <meta name="fileswap-version" content="__FILESWAP_VERSION__" />
-  <title>FileSwap</title>
+  <title>FileSwap — Pasa archivos entre tus dispositivos, P2P y sin cuenta</title>
+  <meta name="description" content="Pasa archivos y textos entre tu móvil, tu PC y tus servidores, directo de dispositivo a dispositivo (P2P). Sin cuenta, sin subir nada a la nube y gratis." />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="FileSwap" />
+  <meta property="og:title" content="FileSwap — Pasa archivos entre tus dispositivos" />
+  <meta property="og:description" content="Directo de dispositivo a dispositivo (P2P), sin cuenta y gratis. En el navegador o con un CLI para servidores Linux." />
+  <meta property="og:locale" content="es_ES" />
+  <meta property="og:locale:alternate" content="en_US" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="FileSwap — Pasa archivos entre tus dispositivos" />
+  <meta name="twitter:description" content="Directo de dispositivo a dispositivo (P2P), sin cuenta y gratis." />
+  <!-- Replaced by the server (PUBLIC_URL) with the canonical URL, preview image and structured data -->
+  <!-- __FILESWAP_SEO__ -->
   <link rel="icon" href="/favicon.ico" sizes="48x48" />
   <link rel="icon" type="image/png" href="/icon-192.png" sizes="192x192" />
   <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
@@ -167,7 +179,7 @@
         repeating-linear-gradient(var(--paper) 0 27px, var(--rule) 27px 28px);
     }
     .setup-icon { font-size: 2.6rem; }
-    .setup-title { font-family: var(--font-title); font-size: 1.6rem; font-weight: 700; }
+    .setup-title { font-family: var(--font-title); font-size: 1.6rem; font-weight: 700; margin: 0; }
     .setup-sub { color: var(--muted); font-size: .92rem; line-height: 1.55; }
     .input-row { width: 100%; display: flex; flex-direction: column; gap: 6px; }
     .input-row label {
@@ -727,7 +739,7 @@
     <div class="sheet setup-card">
       <div class="setup-icon">🗂️</div>
       <div>
-        <div class="setup-title" data-i18n="setup.title">Bienvenido a FileSwap</div>
+        <h1 class="setup-title" data-i18n="setup.title">Bienvenido a FileSwap</h1>
         <div class="setup-sub" style="margin-top:8px" data-i18n-html="setup.sub">
           Transferencia de archivos directa entre dispositivos, sin servidores en el medio.
           Este dispositivo recibirá un <strong>código único</strong> (UUID) para vincularse; el nombre es solo para reconocerlo.

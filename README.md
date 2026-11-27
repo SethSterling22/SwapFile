@@ -139,7 +139,7 @@ fileswap/
 
 | Concern | Implementation |
 |---|---|
-| Static file serving | Minimal built-in HTTP, SPA fallback for `?pair=` links |
+| Static file serving | Minimal built-in HTTP; the app at `/` (pairing links are `/?pair=…`), `robots.txt`, `sitemap.xml` with `PUBLIC_URL`, real 404 elsewhere |
 | Device registry | `Map<deviceId, {ws, name, pairedIds, pendingFrom}>` — in-memory, no persistence. `deviceId` is derived from a client secret (SHA-256) |
 | Presence | On connect: notifies paired devices online. On disconnect: broadcasts offline |
 | Pairing | Relays `pair-request` / `pair-accept` / `pair-reject` between devices |
@@ -271,6 +271,9 @@ Copy `server/.env.example` → `server/.env`.
 | `ALLOWED_ORIGINS` | *(empty)* | Extra comma-separated origins whose pages may open the WebSocket. The server's own host is always allowed, and so are clients without an `Origin` (the CLI); any other website is refused with `403` |
 | `TRUST_PROXY` | *(off)* | Set to `1` behind Caddy/nginx: the client IP is taken from the last `X-Forwarded-For` hop, and HSTS is sent on HTTPS. Leave it off if the port is reachable directly, or anyone could fake their IP |
 | `MAX_CONN_PER_IP` | `20` | Max simultaneous WebSocket connections from one IP (`429` beyond it) |
+| `PUBLIC_URL` | *(empty)* | Public address of the app, e.g. `https://www.fileswap.zip`: enables `/sitemap.xml` and puts the canonical URL, the link-preview image (`og-image.png`) and structured data in the page |
+
+**Search engines:** the page has a title, description and Open Graph / Twitter tags for link previews; `/robots.txt` allows the app (and, with `PUBLIC_URL`, points to the sitemap). Only `/` is the app — pairing links are `/?pair=…` — so any other path is a real `404`.
 
 Every page is served with a Content-Security-Policy (inline scripts allowed only by their SHA-256), `X-Frame-Options: DENY`, `nosniff`, `Referrer-Policy: no-referrer` and `Permissions-Policy`. No third-party script is loaded: the QR library is self-hosted in [`client/vendor/`](fileswap/client/vendor/README.md) with Subresource Integrity.
 

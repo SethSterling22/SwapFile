@@ -16,6 +16,8 @@ services:
       # Set to 0 if this port is reachable from the internet directly, without a proxy.
       TRUST_PROXY: 1
       MAX_CONN_PER_IP: 20
+      # Public address: sitemap, canonical URL and link-preview image for search engines
+      PUBLIC_URL: https://www.fileswap.zip
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:3000/health"]
