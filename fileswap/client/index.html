@@ -831,7 +831,7 @@
       <!-- Start over: wipe this browser's FileSwap data -->
       <div class="reset-zone">
         <div class="reset-text" data-i18n="reset.hint">¿Usaste un equipo que no es tuyo? Al terminar, borra todo lo de FileSwap en este navegador.</div>
-        <button class="btn btn-ghost btn-sm reset-btn" id="reset-btn" type="button" data-i18n="reset.button">🧹 Desincronizar y reiniciar sesión </button>
+        <button class="btn btn-ghost btn-sm reset-btn" id="reset-btn" type="button" data-i18n="reset.button">🧹 Desincronizar y reiniciar sesión</button>
       </div>
 
     </div>
@@ -1274,7 +1274,7 @@ const I18N = {
     'guide.dismiss':      'No volver a mostrar',
     'guide.how':          '¿Cómo funciona? Guía rápida',
     'reset.hint':         '¿Usaste un equipo que no es tuyo? Al terminar, borra todo lo de FileSwap en este navegador.',
-    'reset.button':       '🧹 Desincronizar y reiniciar sesión ',
+    'reset.button':       '🧹 Desincronizar y reiniciar sesión',
     'reset.title':        'Borrar todo en este navegador',
     'reset.body':         'FileSwap volverá a empezar desde cero aquí. Se borra:',
     'reset.item.identity':'El código y el nombre de este dispositivo',
@@ -3059,7 +3059,7 @@ const LEGAL = {
       <p>Para saber cuánto se usa FileSwap, el servidor lleva contadores agregados y anónimos: cuántas conexiones, vinculaciones y transferencias iniciadas hay, cuántos dispositivos distintos se conectan cada día y semana, y si son navegadores o nodos de línea de comandos y de qué tipo. No guardan códigos de dispositivo, nombres, direcciones IP ni nada de tus archivos; los dispositivos distintos se cuentan con un valor que se descarta al terminar el día o la semana, así que no se puede seguir a nadie de un día a otro.</p>
       <h3>3. Qué se guarda en tu navegador</h3>
       <hr></hr>
-      <p>En el almacenamiento local (localStorage) se guardan una clave secreta que identifica a tu dispositivo, su código y nombre, la lista de dispositivos vinculados y tus preferencias de tema e idioma. Tu clipboard (los textos y archivos que añades, hasta 24 h) y la última lista vista del clipboard de cada dispositivo vinculado se guardan en el almacenamiento del navegador (IndexedDB); solo tus dispositivos vinculados pueden verlo, directamente y sin pasar por el servidor. Puedes borrarlo todos los nodos con «🧹 Desincronizar y reiniciar sesión», al final de la página principal, o eliminando los datos de este sitio desde tu navegador.</p>
+      <p>En el almacenamiento local (localStorage) se guardan una clave secreta que identifica a tu dispositivo, su código y nombre, la lista de dispositivos vinculados y tus preferencias de tema e idioma. Tu clipboard (los textos y archivos que añades, hasta 24 h) y la última lista vista del clipboard de cada dispositivo vinculado se guardan en el almacenamiento del navegador (IndexedDB); solo tus dispositivos vinculados pueden verlo, directamente y sin pasar por el servidor. Puedes borrarlo todo, y desvincular este navegador de tus dispositivos, con «🧹 Desincronizar y reiniciar sesión», al final de la página principal, o eliminando los datos de este sitio desde tu navegador.</p>
       <h3>4. Terceros</h3>
       <hr></hr>
       <ul>
@@ -3229,7 +3229,7 @@ const GUIDE = {
     <ul>
       <li><strong>Archivos recibidos:</strong> mientras llegan se escriben en un espacio privado del navegador para esta web, no en la memoria, así que pueden ser de varios GB. No van a tu carpeta de Descargas hasta que pulses ⬇, y se borran al recargar o cerrar la página: descárgalos antes.</li>
       <li><strong>En una ventana privada</strong> o un navegador sin ese espacio, se guardan en la memoria: hasta 1,5 GB (512 MB en el móvil). Los más grandes se rechazan antes de empezar, y quien envía lo ve.</li>
-      <li><strong>Tu código, tus vinculaciones y tu clipboard</strong> se guardan en este navegador. En una ventana privada se pierden al cerrarla; «🧹 Borrar todo» los elimina.</li>
+      <li><strong>Tu código, tus vinculaciones y tu clipboard</strong> se guardan en este navegador. En una ventana privada se pierden al cerrarla; «🧹 Desincronizar y reiniciar sesión» los elimina.</li>
       <li><strong>Nada de esto se sube al servidor.</strong></li>
     </ul>
     <p style="margin-top:12px">⚠️ Las transferencias van cifradas entre los dispositivos, pero todavía no hay cifrado de extremo a extremo propio: no lo uses para datos médicos, contraseñas ni claves.</p>`,
@@ -3247,7 +3247,7 @@ const GUIDE = {
     <ul>
       <li><strong>Received files</strong> are written, as they arrive, to a private browser space for this site instead of memory, so they can be several GB. They don’t reach your Downloads folder until you press ⬇, and they are deleted when you reload or close the page: download them first.</li>
       <li><strong>In a private window,</strong> or a browser without that space, they are kept in memory: up to 1.5 GB (512 MB on phones). Bigger ones are refused before they start, and the sender is told.</li>
-      <li><strong>Your code, your pairings and your clipboard</strong> are kept in this browser. In a private window they are lost when you close it; “🧹 Delete everything” removes them.</li>
+      <li><strong>Your code, your pairings and your clipboard</strong> are kept in this browser. In a private window they are lost when you close it; “🧹 Desynchronize and restart session” removes them.</li>
       <li><strong>None of it is uploaded to the server.</strong></li>
     </ul>
     <p style="margin-top:12px">⚠️ Transfers are encrypted between the devices, but there is no end-to-end encryption of our own yet: don’t use it for medical data, passwords or keys.</p>`,
